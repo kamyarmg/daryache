@@ -126,7 +126,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       );
       if (usedQuestions.contains(nextSeed.key)) break;
 
-      final answer = nextSeed.value;
+      final answer = nextSeed.value.toUpperCase();
       final question = nextSeed.key;
 
       bool placed = false;
@@ -265,7 +265,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         }
         if (entry == null) break;
 
-        final answer = entry.value;
+        final answer = entry.value.toUpperCase();
         final question = entry.key;
         if (placedQuestionTexts.contains(question)) continue;
 
@@ -452,7 +452,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
               .toList()
             ..shuffle(random);
       for (final entry in remainingEntries) {
-        final answer = entry.value;
+        final answer = entry.value.toUpperCase();
         bool placed = false;
         for (final rc in _centerCells) {
           if (placed) break;
@@ -473,7 +473,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
             QuestionInfo(
               id: questionNumber,
               question: entry.key,
-              answer: entry.value,
+              answer: answer,
               color: _getNextUniqueColor(),
               horizontal:
                   answerPositions[questionNumber]![0].row ==
@@ -603,7 +603,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                 // Try to take a word of length L (real or synthetic)
                 final pick = takeWordOfLen(L);
                 if (pick != null) {
-                  final ans = pick.value;
+                  final ans = pick.value.toUpperCase();
                   if (_canPlaceWord(ans, r, startCol, true)) {
                     _placeWord(ans, r, startCol, true, questionNumber);
                     questions.add(
@@ -651,7 +651,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
               if (_canPlaceWord(' ' * L, startRow, c, false)) {
                 final pick = takeWordOfLen(L);
                 if (pick != null) {
-                  final ans = pick.value;
+                  final ans = pick.value.toUpperCase();
                   if (_canPlaceWord(ans, startRow, c, false)) {
                     _placeWord(ans, startRow, c, false, questionNumber);
                     questions.add(
@@ -939,32 +939,32 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   String _generateSyntheticWord(int length) {
     final rand = Random();
     const letters = [
-      'a',
-      'b',
-      'c',
-      'd',
-      'e',
-      'f',
-      'g',
-      'h',
-      'i',
-      'j',
-      'k',
-      'l',
-      'm',
-      'n',
-      'o',
-      'p',
-      'q',
-      'r',
-      's',
-      't',
-      'u',
-      'v',
-      'w',
-      'x',
-      'y',
-      'z',
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+      'F',
+      'G',
+      'H',
+      'I',
+      'J',
+      'K',
+      'L',
+      'M',
+      'N',
+      'O',
+      'P',
+      'Q',
+      'R',
+      'S',
+      'T',
+      'U',
+      'V',
+      'W',
+      'X',
+      'Y',
+      'Z',
     ];
     return List.generate(
       length,
@@ -1323,36 +1323,36 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     final random = Random();
 
     // Get all unique letters from the current answer
-    Set<String> answerLetters = currentAnswer.split('').toSet();
+    Set<String> answerLetters = currentAnswer.toUpperCase().split('').toSet();
 
     // Add some random English letters
     const englishLetters = [
-      'a',
-      'b',
-      'c',
-      'd',
-      'e',
-      'f',
-      'g',
-      'h',
-      'i',
-      'j',
-      'k',
-      'l',
-      'm',
-      'n',
-      'o',
-      'p',
-      'q',
-      'r',
-      's',
-      't',
-      'u',
-      'v',
-      'w',
-      'x',
-      'y',
-      'z',
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+      'F',
+      'G',
+      'H',
+      'I',
+      'J',
+      'K',
+      'L',
+      'M',
+      'N',
+      'O',
+      'P',
+      'Q',
+      'R',
+      'S',
+      'T',
+      'U',
+      'V',
+      'W',
+      'X',
+      'Y',
+      'Z',
     ];
 
     letterButtons = answerLetters.toList();
@@ -1395,7 +1395,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         .answer;
     if (currentAnswer.length < correctAnswer.length) {
       setState(() {
-        currentAnswers[selectedQuestion!] = currentAnswer + letter;
+        currentAnswers[selectedQuestion!] =
+            currentAnswer + letter.toUpperCase();
         _checkAnswer();
       });
     }
@@ -1411,7 +1412,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
     setState(() {
       if (userAnswer.length == correctAnswer.length) {
-        answeredCorrectly[selectedQuestion!] = (userAnswer == correctAnswer);
+        answeredCorrectly[selectedQuestion!] =
+            (userAnswer.toUpperCase() == correctAnswer.toUpperCase());
       } else {
         answeredCorrectly.remove(selectedQuestion!);
       }
@@ -2002,7 +2004,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                                           ? 0.48
                                                           : 0.36);
                                                   return Text(
-                                                    displayText,
+                                                    displayText.toUpperCase(),
                                                     textAlign: TextAlign.center,
                                                     style: TextStyle(
                                                       fontWeight:
@@ -2035,7 +2037,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                       height: 170,
                       child: Glass(
                         radius: 16,
-                        padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+                        padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
                         child: Stack(
                           children: [
                             // Full-width row: prev (left) | centered question | next (right)
@@ -2134,7 +2136,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                   16,
                                   0,
                                   16,
-                                  8,
+                                  0,
                                 ),
                                 child: Row(
                                   mainAxisAlignment:
@@ -2207,7 +2209,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                 padding: EdgeInsets.zero,
                               ),
                               child: Text(
-                                letter,
+                                letter.toUpperCase(),
                                 style: TextStyle(
                                   fontSize: buttonSize * 0.35,
                                   fontWeight: FontWeight.bold,
@@ -2317,7 +2319,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                             ),
                           ),
                           child: Icon(
-                            Icons.backspace,
+                            Icons.backspace_outlined,
                             color: isDark ? Colors.white : Colors.black87,
                             size: 18,
                           ),
@@ -2346,7 +2348,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                             ),
                           ),
                           child: Icon(
-                            Icons.backspace_outlined,
+                            Icons.cleaning_services,
                             color: isDark ? Colors.white : Colors.black87,
                             size: 18,
                           ),

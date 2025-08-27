@@ -16,8 +16,8 @@ class Position {
 
 class UrmiaColors {
   static const background = Color(0xFFEFF7FA); // airy light
-  static const deepBlue = Color(0xFF136A8A); // lake depth
-  static const turquoise = Color(0xFF27B1D9); // surface
+  static const deepBlue = Color(0xFF1E40AF); // modern deep blue
+  static const turquoise = ui.Color.fromARGB(255, 103, 159, 248); // surface
 }
 
 extension ColorShade on Color {

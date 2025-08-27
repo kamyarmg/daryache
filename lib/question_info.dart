@@ -5,7 +5,7 @@ class QuestionInfo {
   final String question;
   final String answer;
   final Color color;
-  final bool horizontal; // true = row-wise (RTL), false = column-wise
+  final bool horizontal; // true = row-wise (LTR), false = column-wise
 
   QuestionInfo({
     required this.id,

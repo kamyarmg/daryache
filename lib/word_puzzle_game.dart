@@ -130,12 +130,15 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       final question = nextSeed.key;
 
       bool placed = false;
-      // First seed: place horizontally near center for a strong anchor
+      // First seed: place horizontally near center for a strong anchor (LTR)
       if (seedsPlaced == 0) {
         int row = 4;
-        int startCol = 5 + answer.length ~/ 2;
-        if (startCol >= 10) startCol = 9;
-        if (startCol - answer.length < 0) startCol = answer.length;
+        // For LTR, number cell sits before first letter at col = startCol,
+        // and letters go to the right: cols [startCol+1 .. startCol+answer.length]
+        // Keep the word roughly centered.
+        int startCol = max(0, 4 - (answer.length ~/ 2));
+        // Ensure the last letter stays within grid: startCol + length <= 9
+        startCol = min(startCol, 9 - answer.length);
         if (_canPlaceWord(answer, row, startCol, true)) {
           _placeWord(answer, row, startCol, true, questionNumber);
           _horizontalCount++;
@@ -155,7 +158,11 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
               // Try vertical then horizontal to mix orientations early
               for (final horiz in [false, true]) {
                 if (horiz) {
-                  final startCol = c + answerIdx + 1;
+                  // For LTR, with intersection at grid[r][c] = word[answerIdx],
+                  // number cell must be at column startCol such that:
+                  // first letter at startCol+1, index (i-1)==answerIdx at col c =>
+                  // startCol + (answerIdx + 1) = c  => startCol = c - answerIdx - 1
+                  final startCol = c - answerIdx - 1;
                   if (_canPlaceWordAt(answer, r, startCol, true, answerIdx)) {
                     _placeWord(answer, r, startCol, true, questionNumber);
                     _horizontalCount++;
@@ -163,6 +170,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     break;
                   }
                 } else {
+                  // Vertical unchanged: number cell above first letter
                   final startRow = r - answerIdx - 1;
                   if (_canPlaceWordAt(answer, startRow, c, false, answerIdx)) {
                     _placeWord(answer, startRow, c, false, questionNumber);
@@ -335,19 +343,20 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
             bool tryPlace(bool horizontal) {
               if (horizontal) {
-                // Choose row near center first
+                // Choose row near center first (LTR)
                 const rowOrder = [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
                 for (final row in rowOrder) {
-                  int minStartCol = answer.length;
-                  int maxStartCol = 9; // must be within grid
-                  // Try startCols centered around middle
+                  // Valid startCol range so that last letter <= 9:
+                  int minStartCol = 0;
+                  int maxStartCol = 9 - answer.length;
+                  // Try startCols centered around middle-left
+                  final mid = max(0, 4 - (answer.length ~/ 2));
                   final colOrder = [
-                    5 + answer.length ~/ 2,
-                    6 + answer.length ~/ 2,
-                    4 + answer.length ~/ 2,
-                    7 + answer.length ~/ 2,
-                    3 + answer.length ~/ 2,
-                    8 + answer.length ~/ 2,
+                    mid,
+                    min(maxStartCol, mid + 1),
+                    max(minStartCol, mid - 1),
+                    min(maxStartCol, mid + 2),
+                    max(minStartCol, mid - 2),
                     minStartCol,
                     maxStartCol,
                   ];
@@ -509,8 +518,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       }
     }
 
-    // After placement, renumber questions so IDs start from top-right downward (RTL order)
-    _renumberQuestionsSequentialRTL();
+    // After placement, renumber questions so IDs start from top-left downward (LTR order)
+    _renumberQuestionsSequentialLTR();
   }
 
   // Try to place more words into exact-length empty slots (rows & columns)
@@ -548,7 +557,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         if (!allowSynthetic) return null;
         // Synthesize a filler question/answer with length L (1..9)
         final ans = _generateSyntheticWord(L);
-        final qtext = 'سوال افزوده (طول $L)';
+        final qtext = 'Added question (len $L)';
         return MapEntry(qtext, ans);
       }
 
@@ -559,7 +568,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         return _verticalCount / total;
       }
 
-      // Scan rows for empty segments and try to place horizontal words
+      // Scan rows for empty segments and try to place horizontal words (LTR)
       bool scanRowsFirst = true;
       final rv = ratioVert();
       if (rv > 0.60) {
@@ -588,8 +597,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
             int end = c - 1; // inclusive
             int L = end - start + 1;
             if (L > 0 && byLen.containsKey(L)) {
-              // For RTL horizontal, number cell is at col = end + 1
-              int startCol = end + 1;
+              // For LTR horizontal, number cell is at col = start - 1
+              int startCol = start - 1;
               if (_canPlaceWord(' ' * L, r, startCol, true)) {
                 // Try to take a word of length L (real or synthetic)
                 final pick = takeWordOfLen(L);
@@ -690,20 +699,21 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     void fillRowRun(int r, int start, int end) {
       int len = end - start + 1;
       if (len <= 0) return;
-      // Break long runs به قطعات <= 9
+      // Break long runs into segments of length <= 9
       int cursorEnd = end;
       while (cursorEnd >= start) {
         int segEnd = cursorEnd;
         int segStart = max(start, segEnd - 8); // upto length 9
         int segLen = segEnd - segStart + 1;
-        int segStartCol = segEnd + 1;
+        // LTR: number cell is before first letter at segStart-1
+        int segStartCol = segStart - 1;
         final word = _generateSyntheticWord(segLen);
         if (_canPlaceWord(word, r, segStartCol, true)) {
           _placeWord(word, r, segStartCol, true, qNum);
           questions.add(
             QuestionInfo(
               id: qNum,
-              question: 'سوال افزوده (طول $segLen)',
+              question: 'Added question (len $segLen)',
               answer: word,
               color: _getNextUniqueColor(),
               horizontal: true,
@@ -732,7 +742,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
           questions.add(
             QuestionInfo(
               id: qNum,
-              question: 'سوال افزوده (طول $segLen)',
+              question: 'Added question (len $segLen)',
               answer: word,
               color: _getNextUniqueColor(),
               horizontal: false,
@@ -829,14 +839,15 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     // Try horizontal single letter with start cell to the right
     const L = 1;
     final word = _generateSyntheticWord(L);
-    final startCol = c + L; // number cell at right of the single
+    // LTR: number cell to the left of the single
+    final startCol = c - 1;
     if (_canPlaceWord(word, r, startCol, true)) {
       final id = (questions.isEmpty ? 0 : questions.last.id) + 1;
       _placeWord(word, r, startCol, true, id);
       questions.add(
         QuestionInfo(
           id: id,
-          question: 'سوال افزوده (طول 1)',
+          question: 'Added question (len 1)',
           answer: word,
           color: _getNextUniqueColor(),
           horizontal: true,
@@ -853,7 +864,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       questions.add(
         QuestionInfo(
           id: id,
-          question: 'سوال افزوده (طول 1)',
+          question: 'Added question (len 1)',
           answer: word,
           color: _getNextUniqueColor(),
           horizontal: false,
@@ -875,10 +886,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         if ((parity && startOnOdd) || (!parity && !startOnOdd)) continue;
         if (grid[r][c].isNotEmpty || _numberCells.contains('$r:$c')) continue;
         final word = _generateSyntheticWord(1);
-        // Prefer horizontal with start to the right if in-bounds
-        final startCol = c + 1;
+        // Prefer horizontal with start to the left if in-bounds (LTR)
+        final startCol = c - 1;
         bool placed = false;
-        if (startCol < 10 &&
+        if (startCol >= 0 &&
             grid[r][startCol].isEmpty &&
             !_numberCells.contains('$r:$startCol')) {
           if (_canPlaceWord(word, r, startCol, true)) {
@@ -886,7 +897,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
             questions.add(
               QuestionInfo(
                 id: qNum,
-                question: 'سوال افزوده (طول 1)',
+                question: 'Added question (len 1)',
                 answer: word,
                 color: _getNextUniqueColor(),
                 horizontal: true,
@@ -908,7 +919,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
               questions.add(
                 QuestionInfo(
                   id: qNum,
-                  question: 'سوال افزوده (طول 1)',
+                  question: 'Added question (len 1)',
                   answer: word,
                   color: _getNextUniqueColor(),
                   horizontal: false,
@@ -924,31 +935,36 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     return qNum;
   }
 
-  // Generate a synthetic Persian word of given length (1..9) using common letters
+  // Generate a synthetic English word of given length (1..9) using common letters
   String _generateSyntheticWord(int length) {
     final rand = Random();
     const letters = [
-      'ا',
-      'ب',
-      'پ',
-      'ت',
-      'س',
-      'ش',
-      'ر',
-      'ن',
-      'م',
-      'ک',
-      'گ',
-      'ل',
-      'د',
-      'ف',
-      'ق',
-      'و',
-      'ه',
-      'ی',
-      'ز',
-      'چ',
-      'ج',
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
+      'i',
+      'j',
+      'k',
+      'l',
+      'm',
+      'n',
+      'o',
+      'p',
+      'q',
+      'r',
+      's',
+      't',
+      'u',
+      'v',
+      'w',
+      'x',
+      'y',
+      'z',
     ];
     return List.generate(
       length,
@@ -973,9 +989,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     return cells;
   }
 
-  // Renumber questions so numbering starts at top-right of each row,
-  // moves to the left within the row (RTL), then proceeds to the next row (top to bottom).
-  void _renumberQuestionsSequentialRTL() {
+  // Renumber questions so numbering starts at top-left of each row,
+  // moves to the right within the row (LTR), then proceeds to the next row (top to bottom).
+  void _renumberQuestionsSequentialLTR() {
     // Collect questions with their start positions
     final items = <Map<String, dynamic>>[];
     for (final q in questions) {
@@ -986,14 +1002,14 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     }
 
     // Sort by row ascending (top to bottom), and within each row
-    // by column descending (right to left) to get 1..n scan order RTL.
+    // by column ascending (left to right) to get 1..n scan order LTR.
     items.sort((a, b) {
       final ra = a['row'] as int;
       final rb = b['row'] as int;
       if (ra != rb) return ra.compareTo(rb);
       final ca = a['col'] as int;
       final cb = b['col'] as int;
-      return cb.compareTo(ca);
+      return ca.compareTo(cb);
     });
 
     // Build remapped structures
@@ -1053,8 +1069,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
     for (int i = 0; i <= word.length; i++) {
       int row = horizontal ? startRow : startRow + i;
-      // RTL for horizontal: move left as i increases
-      int col = horizontal ? startCol - i : startCol;
+      // LTR for horizontal: move right as i increases
+      int col = horizontal ? startCol + i : startCol;
 
       if (row >= 10 || col >= 10 || col < 0) return false;
 
@@ -1100,9 +1116,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     // Trailing boundary: the cell immediately after the last letter must not be a letter
     if (_enforceAdjacency) {
       if (horizontal) {
-        int tailCol = startCol - word.length;
-        int afterTailCol = tailCol - 1;
-        if (afterTailCol >= 0) {
+        int tailCol = startCol + word.length; // last letter col
+        int afterTailCol = tailCol + 1; // must be empty or out of bounds
+        if (afterTailCol < 10) {
           if (grid[startRow][afterTailCol].isNotEmpty &&
               !_numberCells.contains('$startRow:$afterTailCol')) {
             return false;
@@ -1136,7 +1152,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     }
     for (int i = 0; i <= word.length; i++) {
       int row = horizontal ? startRow : startRow + i;
-      int col = horizontal ? startCol - i : startCol;
+      int col = horizontal ? startCol + i : startCol;
 
       if (row >= 10 || col >= 10 || col < 0) return false;
 
@@ -1188,9 +1204,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     }
     if (_enforceAdjacency) {
       if (horizontal) {
-        int tailCol = startCol - word.length;
-        int afterTailCol = tailCol - 1;
-        if (afterTailCol >= 0) {
+        int tailCol = startCol + word.length;
+        int afterTailCol = tailCol + 1;
+        if (afterTailCol < 10) {
           if (grid[startRow][afterTailCol].isNotEmpty &&
               !_numberCells.contains('$startRow:$afterTailCol')) {
             return false;
@@ -1221,8 +1237,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
     for (int i = 0; i <= word.length; i++) {
       int row = horizontal ? startRow : startRow + i;
-      // RTL for horizontal answers: move left for subsequent chars
-      int col = horizontal ? startCol - i : startCol;
+      // LTR for horizontal answers: move right for subsequent chars
+      int col = horizontal ? startCol + i : startCol;
 
       // i==0 is the number cell; keep it reserved, do not place a letter there
       if (i > 0) {
@@ -1309,40 +1325,34 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     // Get all unique letters from the current answer
     Set<String> answerLetters = currentAnswer.split('').toSet();
 
-    // Add some random Persian letters
-    final persianLetters = [
-      'ا',
-      'ب',
-      'پ',
-      'ت',
-      'ث',
-      'ج',
-      'چ',
-      'ح',
-      'خ',
-      'د',
-      'ذ',
-      'ر',
-      'ز',
-      'ژ',
-      'س',
-      'ش',
-      'ص',
-      'ض',
-      'ط',
-      'ظ',
-      'ع',
-      'غ',
-      'ف',
-      'ق',
-      'ک',
-      'گ',
-      'ل',
-      'م',
-      'ن',
-      'و',
-      'ه',
-      'ی',
+    // Add some random English letters
+    const englishLetters = [
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
+      'i',
+      'j',
+      'k',
+      'l',
+      'm',
+      'n',
+      'o',
+      'p',
+      'q',
+      'r',
+      's',
+      't',
+      'u',
+      'v',
+      'w',
+      'x',
+      'y',
+      'z',
     ];
 
     letterButtons = answerLetters.toList();
@@ -1350,7 +1360,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     // Add random letters to make 10 total
     while (letterButtons.length < 10) {
       String randomLetter =
-          persianLetters[random.nextInt(persianLetters.length)];
+          englishLetters[random.nextInt(englishLetters.length)];
       if (!letterButtons.contains(randomLetter)) {
         letterButtons.add(randomLetter);
       }
@@ -1465,226 +1475,219 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: SafeArea(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0E1A2A) : Colors.white,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                  bottom: Radius.circular(16),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.14),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-                border: Border.all(
-                  color: (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.05)),
-                ),
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0E1A2A) : Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+                bottom: Radius.circular(16),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : Colors.black.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.14),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+              border: Border.all(
+                color: (isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.05)),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.25)
+                        : Colors.black.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isDark
+                          ? const [Color(0xFF0E2A47), Color(0xFF165A74)]
+                          : const [UrmiaColors.deepBlue, UrmiaColors.turquoise],
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isDark
-                            ? const [Color(0xFF0E2A47), Color(0xFF165A74)]
-                            : const [
-                                UrmiaColors.deepBlue,
-                                UrmiaColors.turquoise,
-                              ],
-                      ),
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.help_center, color: Colors.white),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text(
-                            'راهنمای بازی جدول کلمات',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.help_center, color: Colors.white),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Word Puzzle Help',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'How to play',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14.5,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _HelpBullet(
+                          icon: Icons.grid_on,
+                          text:
+                              'Pick a numbered colored cell on the grid to select a question. The path for that answer will be softly highlighted.',
+                          isDark: isDark,
+                        ),
+                        _HelpBullet(
+                          icon: Icons.keyboard,
+                          text:
+                              'Tap the suggested letters to fill the path. Each question only accepts its own letters.',
+                          isDark: isDark,
+                        ),
+                        _HelpBullet(
+                          icon: Icons.backspace,
+                          text:
+                              'Made a mistake? Until the answer is correct, you can delete or clear and try again.',
+                          isDark: isDark,
+                        ),
+                        _HelpBullet(
+                          icon: Icons.check_circle,
+                          text:
+                              'When your answer has the right length and is correct, it will lock in and the question text turns green.',
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Controls',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14.5,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _HelpTile(
+                          icon: Icons.arrow_back_ios,
+                          title: 'Previous question',
+                          subtitle:
+                              'Jump to the previous unanswered question (wraps around).',
+                          isDark: isDark,
+                        ),
+                        _HelpTile(
+                          icon: Icons.arrow_forward_ios,
+                          title: 'Next question',
+                          subtitle:
+                              'Jump to the next unanswered question (wraps around).',
+                          isDark: isDark,
+                        ),
+                        _HelpTile(
+                          icon: isDark ? Icons.light_mode : Icons.dark_mode,
+                          title: 'Light/Dark mode',
+                          subtitle:
+                              'Switch the app appearance anytime for comfortable reading.',
+                          isDark: isDark,
+                        ),
+                        _HelpTile(
+                          icon: Icons.cleaning_services,
+                          title: 'Clear answer',
+                          subtitle:
+                              'As long as the answer is not final, you can clear it.',
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: (isDark
+                                ? Colors.greenAccent.withValues(alpha: 0.08)
+                                : Colors.green.withValues(alpha: 0.08)),
+                            border: Border.all(
+                              color: (isDark
+                                  ? Colors.greenAccent.withValues(alpha: 0.25)
+                                  : Colors.green.withValues(alpha: 0.25)),
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.emoji_events,
+                                color: isDark
+                                    ? Colors.greenAccent
+                                    : Colors.green,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Win condition',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'When all questions are green and none remain unanswered, you have successfully completed the game.',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                       ],
                     ),
                   ),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'چطور بازی کنیم',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14.5,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          _HelpBullet(
-                            icon: Icons.grid_on,
-                            text:
-                                'از خانه‌های رنگی شماره‌دار روی جدول یک سؤال را انتخاب کنید. مسیر پاسخ همان رنگ کمی برجسته می‌شود.',
-                            isDark: isDark,
-                          ),
-                          _HelpBullet(
-                            icon: Icons.keyboard,
-                            text:
-                                'حروف پیشنهادی بالا را به ترتیب بزنید تا در خانه‌های مسیر قرار بگیرند. هر سؤال فقط با حروف خودش پر می‌شود.',
-                            isDark: isDark,
-                          ),
-                          _HelpBullet(
-                            icon: Icons.backspace,
-                            text:
-                                'اگر اشتباه کردید، تا وقتی پاسخ کامل و صحیح نشده «پاک کردن» را بزنید و دوباره تلاش کنید.',
-                            isDark: isDark,
-                          ),
-                          _HelpBullet(
-                            icon: Icons.check_circle,
-                            text:
-                                'وقتی طول پاسخ کامل شد، اگر درست باشد مسیرش قفل می‌شود و متن سؤال به رنگ سبز در می‌آید.',
-                            isDark: isDark,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'کنترل‌ها',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14.5,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          _HelpTile(
-                            icon: Icons.arrow_back_ios,
-                            title: 'سؤال قبلی',
-                            subtitle:
-                                'رفتن به سؤال قبلی که هنوز پاسخ نداده‌اید (با چرخش).',
-                            isDark: isDark,
-                          ),
-                          _HelpTile(
-                            icon: Icons.arrow_forward_ios,
-                            title: 'سؤال بعدی',
-                            subtitle:
-                                'رفتن به سؤال بعدی که هنوز پاسخ نداده‌اید (با چرخش).',
-                            isDark: isDark,
-                          ),
-                          _HelpTile(
-                            icon: isDark ? Icons.light_mode : Icons.dark_mode,
-                            title: 'حالت تیره/روشن',
-                            subtitle:
-                                'برای مطالعهٔ راحت‌تر، ظاهر برنامه را هر زمان که خواستید تغییر دهید.',
-                            isDark: isDark,
-                          ),
-                          _HelpTile(
-                            icon: Icons.cleaning_services,
-                            title: 'پاک کردن پاسخ',
-                            subtitle:
-                                'تا وقتی پاسخ یک سؤال نهایی نشده، می‌توانید پاسخ آن را پاک کنید.',
-                            isDark: isDark,
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: (isDark
-                                  ? Colors.greenAccent.withValues(alpha: 0.08)
-                                  : Colors.green.withValues(alpha: 0.08)),
-                              border: Border.all(
-                                color: (isDark
-                                    ? Colors.greenAccent.withValues(alpha: 0.25)
-                                    : Colors.green.withValues(alpha: 0.25)),
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.emoji_events,
-                                  color: isDark
-                                      ? Colors.greenAccent
-                                      : Colors.green,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: const [
-                                      Text(
-                                        'شرط پیروزی',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      SizedBox(height: 6),
-                                      Text(
-                                        'وقتی همهٔ سؤال‌ها سبز شدند و هیچ سؤال پاسخ‌نداده‌ای باقی نماند، بازی را با موفقیت تمام کرده‌اید.',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text("Got it, let's start"),
+                    style: TextButton.styleFrom(
+                      foregroundColor: isDark ? Colors.white : Colors.black87,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text('باشه، شروع کنیم'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: isDark ? Colors.white : Colors.black87,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+              ],
             ),
           ),
         );
@@ -1726,7 +1729,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'دریاچه ارومیه',
+          'Deniz',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.95)),
         ),
         foregroundColor: Colors.white,
@@ -2117,7 +2120,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'سوال ${currentQuestionIndex + 1} از ${questions.length}',
+                                      'Question ${currentQuestionIndex + 1} of ${questions.length}',
                                       style: TextStyle(
                                         color: mutedText,
                                         fontSize: _sp(context, 12),
@@ -2141,8 +2144,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         // Calculate button size to exactly match grid cells
-                        final buttonSize =
+                        double buttonSize =
                             _gridCellSize ?? _computeGridCellSize(context);
+                        // Shrink a bit to account for borders/gaps to avoid overflow
+                        buttonSize = (buttonSize - 3).clamp(28.0, 100.0);
 
                         final bool canInteract =
                             (selectedQuestion != null &&
@@ -2197,9 +2202,12 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
                         return SizedBox(
                           height: buttonSize,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: rowChildren,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: rowChildren,
+                            ),
                           ),
                         );
                       },

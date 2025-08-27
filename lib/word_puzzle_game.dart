@@ -1983,17 +1983,35 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                                   BorderRadius.circular(8),
                                             ),
                                             child: Center(
-                                              child: Text(
-                                                displayText,
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: textColor,
-                                                  fontSize:
-                                                      _gridCellSize != null
-                                                      ? _gridCellSize! * 0.38
-                                                      : _sp(context, 14),
-                                                ),
+                                              child: Builder(
+                                                builder: (context) {
+                                                  // Larger font for answer letters, moderate for start numbers/walls
+                                                  final bool isStartCell =
+                                                      questionId != null;
+                                                  final bool isLetterChar =
+                                                      !isStartCell &&
+                                                      displayText.isNotEmpty;
+                                                  final double cellSize =
+                                                      _gridCellSize ??
+                                                      _computeGridCellSize(
+                                                        context,
+                                                      );
+                                                  final double cellFontSize =
+                                                      cellSize *
+                                                      (isLetterChar
+                                                          ? 0.48
+                                                          : 0.36);
+                                                  return Text(
+                                                    displayText,
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: textColor,
+                                                      fontSize: cellFontSize,
+                                                    ),
+                                                  );
+                                                },
                                               ),
                                             ),
                                           ),
@@ -2062,7 +2080,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                       maxLines: 4,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        fontSize: _sp(context, 15),
+                                        fontSize: _sp(context, 13),
                                         fontWeight: FontWeight.bold,
                                         color:
                                             (selectedQuestion != null &&
@@ -2110,10 +2128,13 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                             Positioned(
                               left: 0,
                               right: 0,
-                              bottom: 6,
+                              bottom: 0,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  8,
                                 ),
                                 child: Row(
                                   mainAxisAlignment:

@@ -1,8 +1,8 @@
 import 'dart:math';
 
-import 'package:daryache/main.dart';
-import 'package:daryache/question_info.dart';
-import 'package:daryache/questions.dart';
+import 'package:deniz/main.dart';
+import 'package:deniz/question_info.dart';
+import 'package:deniz/questions.dart';
 import 'package:flutter/material.dart';
 
 class WordPuzzleGame extends StatefulWidget {

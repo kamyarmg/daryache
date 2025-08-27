@@ -1,10 +1,10 @@
 import 'dart:ui' as ui;
 
-import 'package:daryache/daryache.dart';
+import 'package:deniz/deniz.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const Daryache());
+  runApp(const Deniz());
 }
 
 class Position {

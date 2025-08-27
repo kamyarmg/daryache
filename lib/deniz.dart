@@ -1,15 +1,15 @@
-import 'package:daryache/main.dart';
-import 'package:daryache/word_puzzle_game.dart';
+import 'package:deniz/main.dart';
+import 'package:deniz/word_puzzle_game.dart';
 import 'package:flutter/material.dart';
 
-class Daryache extends StatefulWidget {
-  const Daryache({super.key});
+class Deniz extends StatefulWidget {
+  const Deniz({super.key});
 
   @override
-  State<Daryache> createState() => _DaryacheState();
+  State<Deniz> createState() => _DenizState();
 }
 
-class _DaryacheState extends State<Daryache> {
+class _DenizState extends State<Deniz> {
   ThemeMode _mode = ThemeMode.light;
 
   void _toggleTheme() {

@@ -9,14 +9,14 @@ final Map<String, String> qA = {
       "SLAVERY",
   "Women have the same rights as _ _ in every area of life. No one can treat them unfairly because of their gender":
       "MEN",
-  "Women have the right to go to school, college, or university, _ _ helps them become independent and make their own decisions":
-      "EDUCATION",
   "Women can work in any job or profession they choose. They should receive equal _ _ and safe working conditions":
       "PAY",
   "Women should have the same chances as _ _ in education, work, politics, and sports. Society should remove all barriers that stop women from achieving their goals":
       "MEN",
-  "All people are _ _, no matter their race, gender, religion, or status. Everyone should be treated fairly":
-      "EQUAL",
-  "Everyone has the right to _ _ and start a family. They should make these choices freely":
-      "MARRY",
+  "Melting ice sheets in Arctic and _ _ are adding huge amounts of water to the oceans. This leads to rising sea levels across the globe":
+      "ANTARCTICA",
+  "The world produces more than _ _ billion tons of garbage every year, much of it not recycled":
+      "TWO",
+  "About _ _ million tons of plastic enter the oceans each year—enough to cover every coastline in the world":
+      "EIGHT"
 };

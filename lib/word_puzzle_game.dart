@@ -22,11 +22,15 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   late List<String> userAnswers;
   late Map<int, String> currentAnswers;
   late Map<int, bool> answeredCorrectly;
+  // Track one-time hint usage per question
+  late Set<int> _hintUsed;
   // Track orientation balance
   int _verticalCount = 0;
   int _horizontalCount = 0;
   // Placement policy: enforce adjacency and trailing boundary rules
   final bool _enforceAdjacency = true;
+  // Debounce rapid taps on the hint button
+  bool _hintInProgress = false;
 
   int currentQuestionIndex = 0;
   int? selectedQuestion;
@@ -40,6 +44,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   late List<List<int>> _centerCells;
   // Enforce a balanced mix of horizontal/vertical by alternating preference
   bool _placeNextVertical = true; // first word is horizontal -> next vertical
+  bool _hasCelebrated = false; // show win celebration only once
 
   // Responsive font scaling against a baseline device size
   double _screenScale(BuildContext context) {
@@ -87,7 +92,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     userAnswers = List.generate(10 * 10, (index) => '');
     currentAnswers = {};
     answeredCorrectly = {};
+    _hintUsed = <int>{};
+    _hintInProgress = false;
     _numberCells = <String>{};
+    _hasCelebrated = false;
     _colorIndex = 0; // Reset color index for new game
     _verticalCount = 0;
     _horizontalCount = 0;
@@ -1418,6 +1426,213 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         answeredCorrectly.remove(selectedQuestion!);
       }
     });
+
+    // After updating answer state, check if all questions are solved
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForCompletionAndCelebrate();
+    });
+  }
+
+  // True when all questions are correctly answered
+  bool _allAnsweredCorrect() {
+    if (questions.isEmpty) return false;
+    for (final q in questions) {
+      if (answeredCorrectly[q.id] != true) return false;
+    }
+    return true;
+  }
+
+  void _checkForCompletionAndCelebrate() {
+    if (_hasCelebrated) return;
+    if (!_allAnsweredCorrect()) return;
+    _hasCelebrated = true;
+    _showWinCelebration();
+  }
+
+  void _showWinCelebration() {
+    final bool isDark = widget.isDark;
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'celebration',
+      barrierColor: Colors.black.withValues(alpha: 0.65),
+      transitionDuration: const Duration(milliseconds: 550),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, secAnim, child) {
+        final curve = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
+        return Stack(
+          children: [
+            Opacity(
+              opacity: anim.value,
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: Transform.scale(
+                scale: curve.value,
+                child: Container(
+                  width: 360,
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isDark
+                          ? const [Color(0xFF0E2A47), Color(0xFF165A74)]
+                          : const [UrmiaColors.deepBlue, UrmiaColors.turquoise],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.5 : 0.18,
+                        ),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: (isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.white.withValues(alpha: 0.35)),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Glow ring behind trophy
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 700),
+                            curve: Curves.easeOut,
+                            width: 110 + 20 * anim.value,
+                            height: 110 + 20 * anim.value,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(
+                                alpha: 0.12 + 0.08 * anim.value,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withValues(alpha: 0.22),
+                                  blurRadius: 30,
+                                  spreadRadius: 6,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.emoji_events,
+                            color: Colors.amberAccent.shade200,
+                            size: 72 + 8 * anim.value,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Congratulations!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'You solved all questions successfully.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Confetti emojis, animated in
+                          Transform.translate(
+                            offset: Offset(
+                              -40 * (1 - anim.value),
+                              -8 * anim.value,
+                            ),
+                            child: Transform.rotate(
+                              angle: (0.2 * anim.value),
+                              child: const Text(
+                                '🎉',
+                                style: TextStyle(fontSize: 22),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Transform.translate(
+                            offset: Offset(
+                              20 * (1 - anim.value),
+                              -4 * anim.value,
+                            ),
+                            child: Transform.rotate(
+                              angle: (-0.15 * anim.value),
+                              child: const Text(
+                                '🎊',
+                                style: TextStyle(fontSize: 20),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Transform.translate(
+                            offset: Offset(
+                              36 * (1 - anim.value),
+                              6 * anim.value,
+                            ),
+                            child: Transform.rotate(
+                              angle: (0.1 * anim.value),
+                              child: const Text(
+                                '✨',
+                                style: TextStyle(fontSize: 20),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Icons.check_circle_outline,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'Awesome',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.18),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _clearAnswer() {
@@ -1442,6 +1657,32 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         current.length - 1,
       );
       answeredCorrectly.remove(selectedQuestion!);
+    });
+  }
+
+  // One-time hint: add the next correct letter for the selected question
+  void _useHintOneLetter() {
+    if (selectedQuestion == null) return;
+    final qid = selectedQuestion!;
+    if (_hintInProgress) return; // prevent double-taps
+    if (_hintUsed.contains(qid)) return; // already used for this question
+    if (answeredCorrectly[qid] == true) return; // already solved
+
+    final correctAnswer = questions
+        .firstWhere((q) => q.id == qid)
+        .answer
+        .toUpperCase();
+    final current = (currentAnswers[qid] ?? '').toUpperCase();
+    if (current.length >= correctAnswer.length) return; // nothing to add
+    // Immediately mark in-progress and used to disable button in this frame
+    _hintInProgress = true;
+    _hintUsed.add(qid);
+    setState(() {
+      // Append exactly one next correct character
+      final nextChar = correctAnswer[current.length];
+      currentAnswers[qid] = (currentAnswers[qid] ?? '') + nextChar;
+      _hintInProgress = false;
+      _checkAnswer();
     });
   }
 
@@ -2265,6 +2506,45 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                           child: Icon(
                             isDark ? Icons.light_mode : Icons.dark_mode,
                             color: isDark ? Colors.amberAccent : Colors.black87,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton(
+                          onPressed:
+                              (selectedQuestion != null &&
+                                  answeredCorrectly[selectedQuestion] != true &&
+                                  !_hintUsed.contains(selectedQuestion!) &&
+                                  !_hintInProgress &&
+                                  ((currentAnswers[selectedQuestion!] ?? '')
+                                          .length <
+                                      questions
+                                          .firstWhere(
+                                            (q) => q.id == selectedQuestion!,
+                                          )
+                                          .answer
+                                          .length))
+                              ? _useHintOneLetter
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark
+                                ? Colors.white
+                                : Colors.black87,
+                            side: BorderSide(
+                              color: (isDark ? Colors.white70 : Colors.black12)
+                                  .withValues(alpha: 0.6),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.lightbulb_outline,
+                            color: isDark ? Colors.amberAccent : Colors.orange,
                             size: 18,
                           ),
                         ),

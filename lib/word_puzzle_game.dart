@@ -1741,209 +1741,343 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
               child: Column(
                 children: [
                   // Progress bar removed per request
-                  // Grid
+                  // Grid (always square)
                   Expanded(
-                    flex: 3,
-                    child: Glass(
-                      radius: 16,
-                      padding: EdgeInsets.zero,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          // Cache the exact grid cell size based on actual grid width
-                          const gridPadding =
-                              8.0; // Edge insets all(4) => 8 total
-                          const crossAxisSpacing = 1.0;
-                          const cells = 10;
-                          final gridWidth = constraints.maxWidth;
-                          _gridCellSize =
-                              (gridWidth -
-                                  gridPadding -
-                                  crossAxisSpacing * (cells - 1)) /
-                              cells;
-                          return Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: GridView.builder(
-                              padding: const EdgeInsets.all(4),
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 10,
-                                    crossAxisSpacing: 1,
-                                    mainAxisSpacing: 1,
-                                  ),
-                              itemCount: 100,
-                              itemBuilder: (context, index) {
-                                // Direct mapping: row/col follow grid indices
-                                int row = index ~/ 10;
-                                int col = index % 10;
+                    child: LayoutBuilder(
+                      builder: (context, outer) {
+                        final double squareSize = min(
+                          outer.maxWidth,
+                          outer.maxHeight,
+                        );
+                        return Align(
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: squareSize,
+                            height: squareSize,
+                            child: Glass(
+                              radius: 16,
+                              padding: EdgeInsets.zero,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  // Cache the exact grid cell size based on actual grid width
+                                  const gridPadding =
+                                      8.0; // Edge insets all(4) => 8 total
+                                  const crossAxisSpacing = 1.0;
+                                  const cells = 10;
+                                  final gridWidth = constraints.maxWidth;
+                                  _gridCellSize =
+                                      (gridWidth -
+                                          gridPadding -
+                                          crossAxisSpacing * (cells - 1)) /
+                                      cells;
+                                  return Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: GridView.builder(
+                                      padding: const EdgeInsets.all(4),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 10,
+                                            crossAxisSpacing: 1,
+                                            mainAxisSpacing: 1,
+                                          ),
+                                      itemCount: 100,
+                                      itemBuilder: (context, index) {
+                                        // Direct mapping: row/col follow grid indices
+                                        int row = index ~/ 10;
+                                        int col = index % 10;
 
-                                // Determine if this is a number cell (either a real question start or a neutral filler block)
-                                int? questionId;
-                                for (var q in questions) {
-                                  final positions = answerPositions[q.id];
-                                  if (positions != null &&
-                                      positions.first.row == row &&
-                                      positions.first.col == col) {
-                                    questionId = q.id;
-                                    break;
-                                  }
-                                }
+                                        // Determine if this is a number cell (either a real question start or a neutral filler block)
+                                        int? questionId;
+                                        for (var q in questions) {
+                                          final positions =
+                                              answerPositions[q.id];
+                                          if (positions != null &&
+                                              positions.first.row == row &&
+                                              positions.first.col == col) {
+                                            questionId = q.id;
+                                            break;
+                                          }
+                                        }
 
-                                final bool isReservedNumberCell = _numberCells
-                                    .contains('$row:$col');
+                                        final bool isReservedNumberCell =
+                                            _numberCells.contains('$row:$col');
 
-                                Color backgroundColor = isDark
-                                    ? Colors.white.withValues(alpha: 0.08)
-                                    : Colors.white.withValues(alpha: 0.6);
-                                String displayText = '';
-                                Color textColor = strongText;
-                                final bool isNumberCell = isReservedNumberCell;
-
-                                // If this is a question start cell, set base color and show number
-                                if (questionId != null) {
-                                  final question = questions.firstWhere(
-                                    (q) => q.id == questionId,
-                                  );
-                                  backgroundColor = question.color;
-                                  displayText = questionId.toString();
-                                  textColor = Colors.white;
-                                } else if (isReservedNumberCell) {
-                                  // Solid wall block – subtle glassy wall
-                                  backgroundColor = isDark
-                                      ? Colors.white.withValues(alpha: 0.12)
-                                      : Colors.white.withValues(alpha: 0.25);
-                                  displayText = '';
-                                  textColor = isDark
-                                      ? Colors.white54
-                                      : Colors.black45;
-                                }
-
-                                // Persist typed letters for ALL questions with white background.
-                                // If a cell belongs to any question path (letter cells) and that letter has been typed, show it.
-                                if (!isNumberCell) {
-                                  int? owningQId;
-                                  int?
-                                  letterIndex; // 1-based index within the answer path
-                                  for (final q in questions) {
-                                    final pos = answerPositions[q.id];
-                                    if (pos == null) continue;
-                                    final idx = pos.indexWhere(
-                                      (p) => p.row == row && p.col == col,
-                                    );
-                                    if (idx > 0) {
-                                      // letter cells only (skip number cell at 0)
-                                      final userAns =
-                                          currentAnswers[q.id] ?? '';
-                                      if (userAns.length >= idx) {
-                                        owningQId = q.id;
-                                        letterIndex = idx;
-                                        break; // take the first matching (overlaps should agree)
-                                      }
-                                    }
-                                  }
-
-                                  if (owningQId != null &&
-                                      letterIndex != null) {
-                                    final userAns =
-                                        currentAnswers[owningQId] ?? '';
-                                    displayText = userAns[letterIndex - 1];
-                                    // Keep answer block base color scheme; in dark use a subtle glass tint
-                                    backgroundColor = isDark
-                                        ? Colors.white.withValues(alpha: 0.14)
-                                        : Colors.white.withValues(alpha: 0.9);
-                                    final bool isCorrect =
-                                        (answeredCorrectly[owningQId] == true);
-                                    if (isCorrect && isDark) {
-                                      // Darken correct blocks a bit in dark mode for modern contrast
-                                      backgroundColor = Colors.white.withValues(
-                                        alpha: 0.08,
-                                      );
-                                    }
-                                    textColor = isDark
-                                        ? Colors.white
-                                        : (isCorrect
-                                              ? Colors.black
-                                              : UrmiaColors.deepBlue);
-                                  } else if (selectedQuestion != null) {
-                                    // No persisted letter: softly highlight the selected question path for guidance
-                                    final pos =
-                                        answerPositions[selectedQuestion!];
-                                    if (pos != null) {
-                                      final idx = pos.indexWhere(
-                                        (p) => p.row == row && p.col == col,
-                                      );
-                                      if (idx != -1 &&
-                                          !(questionId == selectedQuestion)) {
-                                        final question = questions.firstWhere(
-                                          (q) => q.id == selectedQuestion!,
-                                        );
-                                        backgroundColor = question.color
-                                            .withValues(
-                                              alpha: isDark ? 0.18 : 0.25,
-                                            );
-                                      }
-                                    }
-                                  }
-                                }
-
-                                return GestureDetector(
-                                  onTap: questionId != null
-                                      ? () => _onQuestionTap(questionId!)
-                                      : null,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: backgroundColor,
-                                      border: Border.all(
-                                        color: isDark
+                                        Color backgroundColor = isDark
                                             ? Colors.white.withValues(
-                                                alpha: 0.18,
+                                                alpha: 0.08,
                                               )
                                             : Colors.white.withValues(
-                                                alpha: 0.35,
-                                              ),
-                                        width: 0.6,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: (isDark
-                                              ? Colors.black.withValues(
-                                                  alpha: 0.5,
+                                                alpha: 0.6,
+                                              );
+                                        String displayText = '';
+                                        Color textColor = strongText;
+                                        final bool isNumberCell =
+                                            isReservedNumberCell;
+
+                                        // If this is a question start cell, set base color and show number
+                                        if (questionId != null) {
+                                          final question = questions.firstWhere(
+                                            (q) => q.id == questionId,
+                                          );
+                                          backgroundColor = question.color;
+                                          displayText = questionId.toString();
+                                          textColor = Colors.white;
+                                        } else if (isReservedNumberCell) {
+                                          // Solid wall block – subtle glassy wall
+                                          backgroundColor = isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.12,
                                                 )
-                                              : Colors.black.withValues(
-                                                  alpha: 0.04,
-                                                )),
-                                          blurRadius: 3,
-                                          offset: const Offset(0, 1),
-                                        ),
-                                      ],
-                                      borderRadius: BorderRadius.circular(8),
+                                              : Colors.white.withValues(
+                                                  alpha: 0.25,
+                                                );
+                                          displayText = '';
+                                          textColor = isDark
+                                              ? Colors.white54
+                                              : Colors.black45;
+                                        }
+
+                                        // Persist typed letters for ALL questions with white background.
+                                        // If a cell belongs to any question path (letter cells) and that letter has been typed, show it.
+                                        if (!isNumberCell) {
+                                          int? owningQId;
+                                          int?
+                                          letterIndex; // 1-based index within the answer path
+                                          for (final q in questions) {
+                                            final pos = answerPositions[q.id];
+                                            if (pos == null) continue;
+                                            final idx = pos.indexWhere(
+                                              (p) =>
+                                                  p.row == row && p.col == col,
+                                            );
+                                            if (idx > 0) {
+                                              // letter cells only (skip number cell at 0)
+                                              final userAns =
+                                                  currentAnswers[q.id] ?? '';
+                                              if (userAns.length >= idx) {
+                                                owningQId = q.id;
+                                                letterIndex = idx;
+                                                break; // take the first matching (overlaps should agree)
+                                              }
+                                            }
+                                          }
+
+                                          if (owningQId != null &&
+                                              letterIndex != null) {
+                                            final userAns =
+                                                currentAnswers[owningQId] ?? '';
+                                            displayText =
+                                                userAns[letterIndex - 1];
+                                            // Keep answer block base color scheme; in dark use a subtle glass tint
+                                            backgroundColor = isDark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.14,
+                                                  )
+                                                : Colors.white.withValues(
+                                                    alpha: 0.9,
+                                                  );
+                                            final bool isCorrect =
+                                                (answeredCorrectly[owningQId] ==
+                                                true);
+                                            if (isCorrect && isDark) {
+                                              // Darken correct blocks a bit in dark mode for modern contrast
+                                              backgroundColor = Colors.white
+                                                  .withValues(alpha: 0.08);
+                                            }
+                                            textColor = isDark
+                                                ? Colors.white
+                                                : (isCorrect
+                                                      ? Colors.black
+                                                      : UrmiaColors.deepBlue);
+                                          } else if (selectedQuestion != null) {
+                                            // No persisted letter: softly highlight the selected question path for guidance
+                                            final pos =
+                                                answerPositions[selectedQuestion!];
+                                            if (pos != null) {
+                                              final idx = pos.indexWhere(
+                                                (p) =>
+                                                    p.row == row &&
+                                                    p.col == col,
+                                              );
+                                              if (idx != -1 &&
+                                                  !(questionId ==
+                                                      selectedQuestion)) {
+                                                final question = questions
+                                                    .firstWhere(
+                                                      (q) =>
+                                                          q.id ==
+                                                          selectedQuestion!,
+                                                    );
+                                                backgroundColor = question.color
+                                                    .withValues(
+                                                      alpha: isDark
+                                                          ? 0.18
+                                                          : 0.25,
+                                                    );
+                                              }
+                                            }
+                                          }
+                                        }
+
+                                        return GestureDetector(
+                                          onTap: questionId != null
+                                              ? () =>
+                                                    _onQuestionTap(questionId!)
+                                              : null,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: backgroundColor,
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.18,
+                                                      )
+                                                    : Colors.white.withValues(
+                                                        alpha: 0.35,
+                                                      ),
+                                                width: 0.6,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: (isDark
+                                                      ? Colors.black.withValues(
+                                                          alpha: 0.5,
+                                                        )
+                                                      : Colors.black.withValues(
+                                                          alpha: 0.04,
+                                                        )),
+                                                  blurRadius: 3,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                displayText,
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: textColor,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
-                                    child: Center(
-                                      child: Text(
-                                        displayText,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: textColor,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  // Question box: fixed height (~4 lines + 1 line extra space), directly under grid
+                  const SizedBox(height: 4),
+                  if (questions.isNotEmpty)
+                    SizedBox(
+                      height: 170,
+                      child: Glass(
+                        radius: 16,
+                        padding: const EdgeInsets.all(16),
+                        child: Stack(
+                          children: [
+                            // Centered row: prev | question text | next
+                            Center(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    onPressed:
+                                        questions.any(
+                                          (q) =>
+                                              answeredCorrectly[q.id] != true,
+                                        )
+                                        ? _previousQuestion
+                                        : null,
+                                    icon: Icon(
+                                      Icons.arrow_back_ios,
+                                      color: strongText,
+                                    ),
+                                    iconSize: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _formatQuestionText(
+                                        questions[currentQuestionIndex],
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 4,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color:
+                                            (selectedQuestion != null &&
+                                                answeredCorrectly[selectedQuestion!] ==
+                                                    true)
+                                            ? (isDark
+                                                  ? Colors.greenAccent
+                                                  : Colors.green)
+                                            : strongText,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed:
+                                        questions.any(
+                                          (q) =>
+                                              answeredCorrectly[q.id] != true,
+                                        )
+                                        ? _nextQuestion
+                                        : null,
+                                    icon: Icon(
+                                      Icons.arrow_forward_ios,
+                                      color: strongText,
+                                    ),
+                                    iconSize: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Bottom info row
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 6,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'سوال ${currentQuestionIndex + 1} از ${questions.length}',
+                                    style: TextStyle(
+                                      color: mutedText,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
-                  // Letter buttons (moved above question box)
+                  const SizedBox(height: 12),
+
+                  // Letter buttons (single row, same size/spacing as grid; clear on separate line)
                   Glass(
                     radius: 16,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(4),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         // Calculate button size to exactly match grid cells
@@ -1952,62 +2086,25 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
                         final bool canInteract =
                             (selectedQuestion != null &&
-                                answeredCorrectly[selectedQuestion] != true);
-                        return Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            // Letter buttons
-                            ...letterButtons.map((letter) {
-                              return ElevatedButton(
-                                onPressed:
-                                    canInteract ? () => _onLetterTap(letter) : null,
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: Size(buttonSize, buttonSize),
-                                  maximumSize: Size(buttonSize, buttonSize),
-                                  backgroundColor: isDark
-                                      ? Colors.white.withValues(alpha: 0.12)
-                                      : Colors.white.withValues(alpha: 0.9),
-                                  foregroundColor: isDark
-                                      ? Colors.white
-                                      : UrmiaColors.deepBlue,
-                                  elevation: 3,
-                                  shadowColor: isDark
-                                      ? Colors.black.withValues(alpha: 0.4)
-                                      : Colors.black.withValues(alpha: 0.08),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.18)
-                                          : Colors.white.withValues(alpha: 0.6),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                ),
-                                child: Text(
-                                  letter,
-                                  style: TextStyle(
-                                    fontSize: buttonSize * 0.35,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : null,
-                                  ),
-                                ),
-                              );
-                            }),
-                            // Clear button placed among letter buttons
+                            answeredCorrectly[selectedQuestion] != true);
+                        // Build a single-row strip of 10 buttons with 1px gaps
+                        List<Widget> rowChildren = [];
+                        for (int i = 0; i < letterButtons.length; i++) {
+                          final letter = letterButtons[i];
+                          rowChildren.add(
                             ElevatedButton(
-                              onPressed: canInteract ? _clearAnswer : null,
+                              onPressed: canInteract
+                                  ? () => _onLetterTap(letter)
+                                  : null,
                               style: ElevatedButton.styleFrom(
                                 minimumSize: Size(buttonSize, buttonSize),
                                 maximumSize: Size(buttonSize, buttonSize),
                                 backgroundColor: isDark
                                     ? Colors.white.withValues(alpha: 0.12)
                                     : Colors.white.withValues(alpha: 0.9),
-                                foregroundColor:
-                                    isDark ? Colors.white : UrmiaColors.deepBlue,
+                                foregroundColor: isDark
+                                    ? Colors.white
+                                    : UrmiaColors.deepBlue,
                                 elevation: 3,
                                 shadowColor: isDark
                                     ? Colors.black.withValues(alpha: 0.4)
@@ -2023,10 +2120,71 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                 ),
                                 padding: EdgeInsets.zero,
                               ),
-                              child: Icon(
-                                Icons.backspace_outlined,
-                                size: buttonSize * 0.45,
-                                color: isDark ? Colors.white : null,
+                              child: Text(
+                                letter,
+                                style: TextStyle(
+                                  fontSize: buttonSize * 0.35,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : null,
+                                ),
+                              ),
+                            ),
+                          );
+                          if (i < letterButtons.length - 1) {
+                            rowChildren.add(const SizedBox(width: 1));
+                          }
+                        }
+
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              height: buttonSize,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: rowChildren,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: buttonSize,
+                              child: Center(
+                                child: ElevatedButton(
+                                  onPressed: canInteract ? _clearAnswer : null,
+                                  style: ElevatedButton.styleFrom(
+                                    minimumSize: Size(buttonSize, buttonSize),
+                                    maximumSize: Size(buttonSize, buttonSize),
+                                    backgroundColor: isDark
+                                        ? Colors.white.withValues(alpha: 0.12)
+                                        : Colors.white.withValues(alpha: 0.9),
+                                    foregroundColor: isDark
+                                        ? Colors.white
+                                        : UrmiaColors.deepBlue,
+                                    elevation: 3,
+                                    shadowColor: isDark
+                                        ? Colors.black.withValues(alpha: 0.4)
+                                        : Colors.black.withValues(alpha: 0.08),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: isDark
+                                            ? Colors.white.withValues(
+                                                alpha: 0.18,
+                                              )
+                                            : Colors.white.withValues(
+                                                alpha: 0.6,
+                                              ),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  child: Icon(
+                                    Icons.backspace_outlined,
+                                    size: buttonSize * 0.45,
+                                    color: isDark ? Colors.white : null,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -2035,82 +2193,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     ),
                   ),
 
-                  const SizedBox(height: 20),
-
-                  // Question display (moved below buttons)
-                  if (questions.isNotEmpty)
-                    Glass(
-                      radius: 16,
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              IconButton(
-                                onPressed:
-                                    questions.any(
-                                      (q) => answeredCorrectly[q.id] != true,
-                                    )
-                                    ? _previousQuestion
-                                    : null,
-                                icon: Icon(
-                                  Icons.arrow_back_ios,
-                                  color: strongText,
-                                ),
-                                iconSize: 20,
-                              ),
-                              Expanded(
-                                child: Text(
-                                  _formatQuestionText(
-                                    questions[currentQuestionIndex],
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    // Green if the selected question is answered correctly
-                                    color:
-                                        (selectedQuestion != null &&
-                                            answeredCorrectly[selectedQuestion!] ==
-                                                true)
-                                        ? (isDark
-                                              ? Colors.greenAccent
-                                              : Colors.green)
-                                        : strongText,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed:
-                                    questions.any(
-                                      (q) => answeredCorrectly[q.id] != true,
-                                    )
-                                    ? _nextQuestion
-                                    : null,
-                                icon: Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: strongText,
-                                ),
-                                iconSize: 20,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'سوال ${currentQuestionIndex + 1} از ${questions.length}',
-                                style: TextStyle(
-                                  color: mutedText,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(height: 12),
 
                   const SizedBox(height: 16),
                   Center(

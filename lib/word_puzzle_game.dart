@@ -41,6 +41,17 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   // Enforce a balanced mix of horizontal/vertical by alternating preference
   bool _placeNextVertical = true; // first word is horizontal -> next vertical
 
+  // Responsive font scaling against a baseline device size
+  double _screenScale(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final shortest = min(size.width, size.height);
+    const base = 400.0; // design baseline
+    final scale = shortest / base;
+    return scale.clamp(0.8, 1.15);
+  }
+
+  double _sp(BuildContext context, double px) => px * _screenScale(context);
+
   // Compute grid cell size so we can size the bottom letter buttons to match
   double _computeGridCellSize(BuildContext context) {
     // Body padding: 16 on each side => 32 total
@@ -1407,6 +1418,21 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     });
   }
 
+  // Delete only the last typed character for the selected question
+  void _deleteLastChar() {
+    if (selectedQuestion == null) return;
+    if (answeredCorrectly[selectedQuestion] == true) return;
+    final current = currentAnswers[selectedQuestion!] ?? '';
+    if (current.isEmpty) return;
+    setState(() {
+      currentAnswers[selectedQuestion!] = current.substring(
+        0,
+        current.length - 1,
+      );
+      answeredCorrectly.remove(selectedQuestion!);
+    });
+  }
+
   void _previousQuestion() {
     if (questions.isEmpty) return;
     final total = questions.length;
@@ -1960,7 +1986,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   color: textColor,
-                                                  fontSize: 14,
+                                                  fontSize:
+                                                      _gridCellSize != null
+                                                      ? _gridCellSize! * 0.38
+                                                      : _sp(context, 14),
                                                 ),
                                               ),
                                             ),
@@ -1985,29 +2014,42 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                       height: 170,
                       child: Glass(
                         radius: 16,
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
                         child: Stack(
                           children: [
-                            // Centered row: prev | question text | next
-                            Center(
+                            // Full-width row: prev (left) | centered question | next (right)
+                            Positioned.fill(
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  IconButton(
-                                    onPressed:
-                                        questions.any(
-                                          (q) =>
-                                              answeredCorrectly[q.id] != true,
-                                        )
-                                        ? _previousQuestion
-                                        : null,
-                                    icon: Icon(
-                                      Icons.arrow_back_ios,
-                                      color: strongText,
+                                  SizedBox(
+                                    width: 48,
+                                    height: double.infinity,
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap:
+                                            questions.any(
+                                              (q) =>
+                                                  answeredCorrectly[q.id] !=
+                                                  true,
+                                            )
+                                            ? _previousQuestion
+                                            : null,
+                                        borderRadius:
+                                            const BorderRadius.horizontal(
+                                              left: Radius.circular(12),
+                                            ),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.arrow_back_ios,
+                                            color: strongText,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    iconSize: 20,
                                   ),
-                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       _formatQuestionText(
@@ -2017,7 +2059,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                       maxLines: 4,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: _sp(context, 15),
                                         fontWeight: FontWeight.bold,
                                         color:
                                             (selectedQuestion != null &&
@@ -2030,20 +2072,33 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    onPressed:
-                                        questions.any(
-                                          (q) =>
-                                              answeredCorrectly[q.id] != true,
-                                        )
-                                        ? _nextQuestion
-                                        : null,
-                                    icon: Icon(
-                                      Icons.arrow_forward_ios,
-                                      color: strongText,
+                                  SizedBox(
+                                    width: 48,
+                                    height: double.infinity,
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap:
+                                            questions.any(
+                                              (q) =>
+                                                  answeredCorrectly[q.id] !=
+                                                  true,
+                                            )
+                                            ? _nextQuestion
+                                            : null,
+                                        borderRadius:
+                                            const BorderRadius.horizontal(
+                                              right: Radius.circular(12),
+                                            ),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.arrow_forward_ios,
+                                            color: strongText,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    iconSize: 20,
                                   ),
                                 ],
                               ),
@@ -2053,18 +2108,23 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                               left: 0,
                               right: 0,
                               bottom: 6,
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'سوال ${currentQuestionIndex + 1} از ${questions.length}',
-                                    style: TextStyle(
-                                      color: mutedText,
-                                      fontSize: 12,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'سوال ${currentQuestionIndex + 1} از ${questions.length}',
+                                      style: TextStyle(
+                                        color: mutedText,
+                                        fontSize: _sp(context, 12),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -2135,59 +2195,12 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                           }
                         }
 
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              height: buttonSize,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: rowChildren,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: buttonSize,
-                              child: Center(
-                                child: ElevatedButton(
-                                  onPressed: canInteract ? _clearAnswer : null,
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize: Size(buttonSize, buttonSize),
-                                    maximumSize: Size(buttonSize, buttonSize),
-                                    backgroundColor: isDark
-                                        ? Colors.white.withValues(alpha: 0.12)
-                                        : Colors.white.withValues(alpha: 0.9),
-                                    foregroundColor: isDark
-                                        ? Colors.white
-                                        : UrmiaColors.deepBlue,
-                                    elevation: 3,
-                                    shadowColor: isDark
-                                        ? Colors.black.withValues(alpha: 0.4)
-                                        : Colors.black.withValues(alpha: 0.08),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: BorderSide(
-                                        color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.18,
-                                              )
-                                            : Colors.white.withValues(
-                                                alpha: 0.6,
-                                              ),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  child: Icon(
-                                    Icons.backspace_outlined,
-                                    size: buttonSize * 0.45,
-                                    color: isDark ? Colors.white : null,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        return SizedBox(
+                          height: buttonSize,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: rowChildren,
+                          ),
                         );
                       },
                     ),
@@ -2200,13 +2213,33 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        OutlinedButton.icon(
+                        OutlinedButton(
                           onPressed: widget.onToggleTheme,
-                          icon: Icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark
+                                ? Colors.white
+                                : Colors.black87,
+                            side: BorderSide(
+                              color: (isDark ? Colors.white70 : Colors.black12)
+                                  .withValues(alpha: 0.6),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Icon(
                             isDark ? Icons.light_mode : Icons.dark_mode,
                             color: isDark ? Colors.amberAccent : Colors.black87,
                             size: 18,
                           ),
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton(
+                          onPressed: _showHelpDialog,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: isDark
                                 ? Colors.white
@@ -2223,19 +2256,21 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          label: Text(
-                            isDark ? 'حالت روشن' : 'حالت تیره',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        OutlinedButton.icon(
-                          onPressed: _showHelpDialog,
-                          icon: Icon(
+                          child: Icon(
                             Icons.help_outline,
                             color: isDark ? Colors.white : Colors.black87,
                             size: 18,
                           ),
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton(
+                          onPressed:
+                              (selectedQuestion != null &&
+                                  answeredCorrectly[selectedQuestion] != true &&
+                                  (currentAnswers[selectedQuestion!] ?? '')
+                                      .isNotEmpty)
+                              ? _deleteLastChar
+                              : null,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: isDark
                                 ? Colors.white
@@ -2252,9 +2287,39 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          label: const Text(
-                            'راهنما',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                          child: Icon(
+                            Icons.backspace,
+                            color: isDark ? Colors.white : Colors.black87,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton(
+                          onPressed:
+                              (selectedQuestion != null &&
+                                  answeredCorrectly[selectedQuestion] != true)
+                              ? _clearAnswer
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark
+                                ? Colors.white
+                                : Colors.black87,
+                            side: BorderSide(
+                              color: (isDark ? Colors.white70 : Colors.black12)
+                                  .withValues(alpha: 0.6),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.backspace_outlined,
+                            color: isDark ? Colors.white : Colors.black87,
+                            size: 18,
                           ),
                         ),
                       ],

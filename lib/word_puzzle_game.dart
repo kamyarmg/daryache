@@ -1635,6 +1635,13 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     );
   }
 
+  // Start a fresh game
+  void _newGame() {
+    setState(() {
+      _initializeGame();
+    });
+  }
+
   void _clearAnswer() {
     if (selectedQuestion == null) return;
     if (answeredCorrectly[selectedQuestion] == true) return;
@@ -1979,6 +1986,17 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
         ),
+        actions: [
+          Tooltip(
+            message: 'Start a new game',
+            child: IconButton(
+              tooltip: 'New game',
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+              onPressed: _newGame,
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -2291,24 +2309,27 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                     height: double.infinity,
                                     child: Material(
                                       color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap:
-                                            questions.any(
-                                              (q) =>
-                                                  answeredCorrectly[q.id] !=
-                                                  true,
-                                            )
-                                            ? _previousQuestion
-                                            : null,
-                                        borderRadius:
-                                            const BorderRadius.horizontal(
-                                              left: Radius.circular(12),
+                                      child: Tooltip(
+                                        message: 'Previous question',
+                                        child: InkWell(
+                                          onTap:
+                                              questions.any(
+                                                (q) =>
+                                                    answeredCorrectly[q.id] !=
+                                                    true,
+                                              )
+                                              ? _previousQuestion
+                                              : null,
+                                          borderRadius:
+                                              const BorderRadius.horizontal(
+                                                left: Radius.circular(12),
+                                              ),
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.arrow_back_ios,
+                                              color: strongText,
+                                              size: 18,
                                             ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.arrow_back_ios,
-                                            color: strongText,
-                                            size: 18,
                                           ),
                                         ),
                                       ),
@@ -2341,24 +2362,27 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                     height: double.infinity,
                                     child: Material(
                                       color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap:
-                                            questions.any(
-                                              (q) =>
-                                                  answeredCorrectly[q.id] !=
-                                                  true,
-                                            )
-                                            ? _nextQuestion
-                                            : null,
-                                        borderRadius:
-                                            const BorderRadius.horizontal(
-                                              right: Radius.circular(12),
+                                      child: Tooltip(
+                                        message: 'Next question',
+                                        child: InkWell(
+                                          onTap:
+                                              questions.any(
+                                                (q) =>
+                                                    answeredCorrectly[q.id] !=
+                                                    true,
+                                              )
+                                              ? _nextQuestion
+                                              : null,
+                                          borderRadius:
+                                              const BorderRadius.horizontal(
+                                                right: Radius.circular(12),
+                                              ),
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.arrow_forward_ios,
+                                              color: strongText,
+                                              size: 18,
                                             ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.arrow_forward_ios,
-                                            color: strongText,
-                                            size: 18,
                                           ),
                                         ),
                                       ),
@@ -2485,152 +2509,214 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        OutlinedButton(
-                          onPressed: widget.onToggleTheme,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark
-                                ? Colors.white
-                                : Colors.black87,
-                            side: BorderSide(
-                              color: (isDark ? Colors.white70 : Colors.black12)
-                                  .withValues(alpha: 0.6),
+                        Tooltip(
+                          message: 'Start a new game',
+                          child: OutlinedButton(
+                            onPressed: _newGame,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              side: BorderSide(
+                                color:
+                                    (isDark ? Colors.white70 : Colors.black12)
+                                        .withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                            child: Icon(
+                              Icons.refresh_rounded,
+                              color: isDark ? Colors.white : Colors.black87,
+                              size: 18,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Icon(
-                            isDark ? Icons.light_mode : Icons.dark_mode,
-                            color: isDark ? Colors.amberAccent : Colors.black87,
-                            size: 18,
                           ),
                         ),
                         const SizedBox(width: 10),
-                        OutlinedButton(
-                          onPressed:
-                              (selectedQuestion != null &&
-                                  answeredCorrectly[selectedQuestion] != true &&
-                                  !_hintUsed.contains(selectedQuestion!) &&
-                                  !_hintInProgress &&
-                                  ((currentAnswers[selectedQuestion!] ?? '')
-                                          .length <
-                                      questions
-                                          .firstWhere(
-                                            (q) => q.id == selectedQuestion!,
-                                          )
-                                          .answer
-                                          .length))
-                              ? _useHintOneLetter
-                              : null,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark
-                                ? Colors.white
-                                : Colors.black87,
-                            side: BorderSide(
-                              color: (isDark ? Colors.white70 : Colors.black12)
-                                  .withValues(alpha: 0.6),
+                        Tooltip(
+                          message: widget.isDark
+                              ? 'Switch to light mode'
+                              : 'Switch to dark mode',
+                          child: OutlinedButton(
+                            onPressed: widget.onToggleTheme,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              side: BorderSide(
+                                color:
+                                    (isDark ? Colors.white70 : Colors.black12)
+                                        .withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                            child: Icon(
+                              isDark ? Icons.light_mode : Icons.dark_mode,
+                              color: isDark
+                                  ? Colors.amberAccent
+                                  : Colors.black87,
+                              size: 18,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.lightbulb_outline,
-                            color: isDark ? Colors.amberAccent : Colors.orange,
-                            size: 18,
                           ),
                         ),
                         const SizedBox(width: 10),
-                        OutlinedButton(
-                          onPressed: _showHelpDialog,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark
-                                ? Colors.white
-                                : Colors.black87,
-                            side: BorderSide(
-                              color: (isDark ? Colors.white70 : Colors.black12)
-                                  .withValues(alpha: 0.6),
+                        Tooltip(
+                          message:
+                              'Use a one-time hint (adds one correct letter)',
+                          child: OutlinedButton(
+                            onPressed:
+                                (selectedQuestion != null &&
+                                    answeredCorrectly[selectedQuestion] !=
+                                        true &&
+                                    !_hintUsed.contains(selectedQuestion!) &&
+                                    !_hintInProgress &&
+                                    ((currentAnswers[selectedQuestion!] ?? '')
+                                            .length <
+                                        questions
+                                            .firstWhere(
+                                              (q) => q.id == selectedQuestion!,
+                                            )
+                                            .answer
+                                            .length))
+                                ? _useHintOneLetter
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              side: BorderSide(
+                                color:
+                                    (isDark ? Colors.white70 : Colors.black12)
+                                        .withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                            child: Icon(
+                              Icons.lightbulb_outline,
+                              color: isDark
+                                  ? Colors.amberAccent
+                                  : Colors.orange,
+                              size: 18,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.help_outline,
-                            color: isDark ? Colors.white : Colors.black87,
-                            size: 18,
                           ),
                         ),
                         const SizedBox(width: 10),
-                        OutlinedButton(
-                          onPressed:
-                              (selectedQuestion != null &&
-                                  answeredCorrectly[selectedQuestion] != true &&
-                                  (currentAnswers[selectedQuestion!] ?? '')
-                                      .isNotEmpty)
-                              ? _deleteLastChar
-                              : null,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark
-                                ? Colors.white
-                                : Colors.black87,
-                            side: BorderSide(
-                              color: (isDark ? Colors.white70 : Colors.black12)
-                                  .withValues(alpha: 0.6),
+                        Tooltip(
+                          message: 'Show help',
+                          child: OutlinedButton(
+                            onPressed: _showHelpDialog,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              side: BorderSide(
+                                color:
+                                    (isDark ? Colors.white70 : Colors.black12)
+                                        .withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                            child: Icon(
+                              Icons.help_outline,
+                              color: isDark ? Colors.white : Colors.black87,
+                              size: 18,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.backspace_outlined,
-                            color: isDark ? Colors.white : Colors.black87,
-                            size: 18,
                           ),
                         ),
                         const SizedBox(width: 10),
-                        OutlinedButton(
-                          onPressed:
+                        Tooltip(
+                          message: 'Delete last character',
+                          child: OutlinedButton(
+                            onPressed:
+                                (selectedQuestion != null &&
+                                    answeredCorrectly[selectedQuestion] !=
+                                        true &&
+                                    (currentAnswers[selectedQuestion!] ?? '')
+                                        .isNotEmpty)
+                                ? _deleteLastChar
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              side: BorderSide(
+                                color:
+                                    (isDark ? Colors.white70 : Colors.black12)
+                                        .withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.backspace_outlined,
+                              color: isDark ? Colors.white : Colors.black87,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Tooltip(
+                          message:
                               (selectedQuestion != null &&
                                   answeredCorrectly[selectedQuestion] != true)
-                              ? _clearAnswer
-                              : null,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark
-                                ? Colors.white
-                                : Colors.black87,
-                            side: BorderSide(
-                              color: (isDark ? Colors.white70 : Colors.black12)
-                                  .withValues(alpha: 0.6),
+                              ? 'Clear answer'
+                              : 'Clear answer (disabled)',
+                          child: OutlinedButton(
+                            onPressed:
+                                (selectedQuestion != null &&
+                                    answeredCorrectly[selectedQuestion] != true)
+                                ? _clearAnswer
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              side: BorderSide(
+                                color:
+                                    (isDark ? Colors.white70 : Colors.black12)
+                                        .withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                            child: Icon(
+                              Icons.cleaning_services,
+                              color: isDark ? Colors.white : Colors.black87,
+                              size: 18,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.cleaning_services,
-                            color: isDark ? Colors.white : Colors.black87,
-                            size: 18,
                           ),
                         ),
                       ],

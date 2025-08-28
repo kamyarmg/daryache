@@ -1,8 +1,8 @@
 import 'dart:math';
 
-import 'package:deniz/main.dart';
-import 'package:deniz/question_info.dart';
-import 'package:deniz/questions.dart';
+import 'package:crossword_for_programmers/main.dart';
+import 'package:crossword_for_programmers/question_info.dart';
+import 'package:crossword_for_programmers/questions.dart';
 import 'package:flutter/material.dart';
 
 class WordPuzzleGame extends StatefulWidget {
@@ -1979,7 +1979,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Deniz',
+          'Crossword For Programmers',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.95)),
         ),
         foregroundColor: Colors.white,

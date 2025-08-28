@@ -1,16 +1,16 @@
-import 'package:deniz/main.dart';
-import 'package:deniz/word_puzzle_game.dart';
+import 'package:crossword_for_programmers/main.dart';
+import 'package:crossword_for_programmers/word_puzzle_game.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class Deniz extends StatefulWidget {
-  const Deniz({super.key});
+class App extends StatefulWidget {
+  const App({super.key});
 
   @override
-  State<Deniz> createState() => _DenizState();
+  State<App> createState() => _AppState();
 }
 
-class _DenizState extends State<Deniz> {
+class _AppState extends State<App> {
   ThemeMode _mode = ThemeMode.light;
 
   void _toggleTheme() {
@@ -22,7 +22,7 @@ class _DenizState extends State<Deniz> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Deniz',
+      title: 'Crossword For Programmers',
       locale: const Locale('en'),
       theme: ThemeData(
         useMaterial3: true,

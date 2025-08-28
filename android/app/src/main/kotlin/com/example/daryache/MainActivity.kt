@@ -1,4 +1,4 @@
-package com.example.deniz
+package com.example.crossword_for_programmers
 
 import io.flutter.embedding.android.FlutterActivity
 

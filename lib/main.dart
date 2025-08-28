@@ -1,10 +1,10 @@
 import 'dart:ui' as ui;
 
-import 'package:deniz/deniz.dart';
+import 'package:crossword_for_programmers/app.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const Deniz());
+  runApp(const App());
 }
 
 class Position {

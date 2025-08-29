@@ -17,6 +17,7 @@ import 'questions/programming_languages.dart';
 import 'questions/prolog.dart';
 import 'questions/python.dart';
 import 'questions/rust.dart';
+import 'questions/security.dart';
 import 'questions/soft_skills.dart';
 import 'questions/solid.dart';
 import 'questions/tools_ides.dart';
@@ -42,5 +43,7 @@ final Map<String, String> qA = {
   ...qAJava,
   ...qAKotlin,
   ...qADesignPatternsGoF,
+  ...qSecurity,
   ...qDevOps,
+  ...qSecurity,
 };

@@ -5,6 +5,13 @@ import 'package:crossword_for_programmers/question_info.dart';
 import 'package:crossword_for_programmers/questions.dart';
 import 'package:flutter/material.dart';
 
+// Lightweight owner tuple for a letter cell: which question and the 1-based index in the answer
+class CellOwner {
+  final int qid;
+  final int idx;
+  const CellOwner(this.qid, this.idx);
+}
+
 class WordPuzzleGame extends StatefulWidget {
   final VoidCallback? onToggleTheme;
   final bool isDark;
@@ -16,6 +23,9 @@ class WordPuzzleGame extends StatefulWidget {
 }
 
 class _WordPuzzleGameState extends State<WordPuzzleGame> {
+  // Desired question count range
+  static const int _minQuestions = 25;
+  static const int _maxQuestions = 35;
   late List<List<String>> grid;
   late List<QuestionInfo> questions;
   late Map<int, List<Position>> answerPositions;
@@ -31,6 +41,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   final bool _enforceAdjacency = true;
   // Debounce rapid taps on the hint button
   bool _hintInProgress = false;
+  // Lightweight loading state to avoid blocking first paint
+  bool _isGenerating = false;
 
   int currentQuestionIndex = 0;
   int? selectedQuestion;
@@ -45,6 +57,11 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   // Enforce a balanced mix of horizontal/vertical by alternating preference
   bool _placeNextVertical = true; // first word is horizontal -> next vertical
   bool _hasCelebrated = false; // show win celebration only once
+
+  // Render caches to avoid per-cell O(N) scans during build
+  late List<List<int>> _startQidGrid; // -1 if none, else question id
+  late List<List<List<CellOwner>>>
+  _ownersGrid; // list of owners per cell (letter positions)
 
   // Responsive font scaling against a baseline device size
   double _screenScale(BuildContext context) {
@@ -103,18 +120,53 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     _colorPalette = _buildColorPalette();
     _colorPalette.shuffle(Random());
     _centerCells = _buildCenterPriorityCells();
+    _startQidGrid = List.generate(10, (_) => List.filled(10, -1));
+    _ownersGrid = List.generate(
+      10,
+      (_) => List.generate(10, (_) => <CellOwner>[]),
+    );
 
-    _generateGrid();
-    if (questions.isNotEmpty) {
-      selectedQuestion = questions[0].id;
-      _generateLetterButtons();
-    }
+    _isGenerating = true;
+    // Run generation after first frame so the loader is visible
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Tiny yield to event queue to ensure paint
+      await Future<void>.delayed(Duration.zero);
+      _generateGrid();
+      if (!mounted) return;
+      setState(() {
+        _isGenerating = false;
+        if (questions.isNotEmpty) {
+          selectedQuestion = questions[0].id;
+          _generateLetterButtons();
+        }
+      });
+    });
   }
 
   void _generateGrid() {
     final random = Random();
-    // Build eligible pools (<= 9 letters). We'll schedule ~20% random picks.
-    final allEligible = qA.entries.where((e) => e.value.length <= 9).toList();
+    // Hard time budget to avoid long stalls on the UI thread
+    final sw = Stopwatch()..start();
+    bool overBudget() => sw.elapsedMilliseconds > 1200; // ~1.2s budget
+    // Build a limited candidate pool (<= 9 letters): mix top-length and random picks
+    final allRaw = qA.entries.where((e) => e.value.length <= 9).toList();
+    final List<MapEntry<String, String>> topByLen = List.of(allRaw)
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+    final int topTake = min(140, topByLen.length);
+    final topSample = topByLen.take(topTake).toList();
+    final List<MapEntry<String, String>> rndShuffled = List.of(allRaw)
+      ..shuffle(random);
+    final int rndTake = min(120, rndShuffled.length);
+    final rndSample = rndShuffled.take(rndTake).toList();
+    // Deduplicate by key and uppercase answers once
+    final seenKeys = <String>{};
+    final List<MapEntry<String, String>> allEligible = [];
+    for (final e in [...topSample, ...rndSample]) {
+      if (seenKeys.add(e.key)) {
+        allEligible.add(MapEntry(e.key, e.value.toUpperCase()));
+      }
+    }
+    // Create working pools
     final randomPool = List<MapEntry<String, String>>.from(allEligible)
       ..shuffle(random);
     final greedyPool = List<MapEntry<String, String>>.from(allEligible)
@@ -124,9 +176,12 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
     final usedQuestions = <String>{};
 
-    // Seed with 5 random questions to start the grid
+    // Seed with up to 3 random questions to start the grid (smaller for speed)
     int seedsPlaced = 0;
-    while (seedsPlaced < 5 && randomPool.isNotEmpty) {
+    while (seedsPlaced < 3 &&
+        randomPool.isNotEmpty &&
+        questions.length < _maxQuestions) {
+      if (overBudget()) break;
       // pick next unused random entry
       final nextSeed = randomPool.firstWhere(
         (e) => !usedQuestions.contains(e.key),
@@ -134,7 +189,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       );
       if (usedQuestions.contains(nextSeed.key)) break;
 
-      final answer = nextSeed.value.toUpperCase();
+      final answer = nextSeed.value; // already uppercased above
       final question = nextSeed.key;
 
       bool placed = false;
@@ -158,6 +213,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       if (!placed) {
         for (final rc in _centerCells) {
           if (placed) break;
+          if (overBudget()) break;
           final r = rc[0], c = rc[1];
           if (grid[r][c].isNotEmpty && !_numberCells.contains('$r:$c')) {
             final existingLetter = grid[r][c];
@@ -221,7 +277,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         }
       }
 
-      if (placed) {
+      if (placed && questions.length < _maxQuestions) {
         final pos = answerPositions[questionNumber]!;
         final isHoriz = pos.length >= 2 && pos[0].row == pos[1].row;
         questions.add(
@@ -253,9 +309,11 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       anyPlaced = false;
       pass++;
       // We'll iterate attempts up to total pool size each pass, mixing random/greedy
-      final maxAttempts = allEligible.length;
+      final maxAttempts = min(allEligible.length, 120);
       int attemptsTried = 0;
       while (attemptsTried < maxAttempts) {
+        if (questions.length >= _maxQuestions) break;
+        if (overBudget()) break;
         attemptsTried++;
         // Choose next candidate honoring ~20% random
         MapEntry<String, String>? entry;
@@ -273,12 +331,13 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         }
         if (entry == null) break;
 
-        final answer = entry.value.toUpperCase();
+        final answer = entry.value; // already uppercased above
         final question = entry.key;
         if (placedQuestionTexts.contains(question)) continue;
 
         bool placed = false;
         int attempts = 0;
+        const int attemptCap = 60; // lower than 500 to avoid long spins
 
         // Stronger balance with 45-55% constraint
         final totalPlaced = _verticalCount + _horizontalCount;
@@ -297,12 +356,14 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
           }
         }
 
-        while (!placed && attempts < 500) {
+        while (!placed && attempts < attemptCap) {
           attempts++;
+          if (overBudget()) break;
 
           // 1) Try intersections scanning cells from center outward for symmetry
           for (final rc in _centerCells) {
             if (placed) break;
+            if (overBudget()) break;
             final r = rc[0], c = rc[1];
             if (grid[r][c].isNotEmpty && !_numberCells.contains('$r:$c')) {
               final existingLetter = grid[r][c];
@@ -315,8 +376,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     : [true, false];
                 for (final horiz in order) {
                   if (horiz) {
-                    final startCol =
-                        c + answerIdx + 1; // ensure letter lands on (r,c)
+                    // Correct LTR intersection math: see seed phase comment
+                    final startCol = c - answerIdx - 1;
                     if (_canPlaceWordAt(answer, r, startCol, true, answerIdx)) {
                       _placeWord(answer, r, startCol, true, questionNumber);
                       placed = true;
@@ -354,6 +415,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                 // Choose row near center first (LTR)
                 const rowOrder = [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
                 for (final row in rowOrder) {
+                  if (overBudget()) return false;
                   // Valid startCol range so that last letter <= 9:
                   int minStartCol = 0;
                   int maxStartCol = 9 - answer.length;
@@ -380,6 +442,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                 // Choose col near center first
                 const colOrder = [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
                 for (final col in colOrder) {
+                  if (overBudget()) return false;
                   int maxStartRow = 10 - answer.length;
                   if (maxStartRow < 0) return false;
                   // Try startRows centered around middle
@@ -417,7 +480,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
           }
         }
 
-        if (placed) {
+        if (placed && questions.length < _maxQuestions) {
           // Flip preferred orientation for the next placement
           _placeNextVertical = !_placeNextVertical;
           // Determine actual orientation for this placed word by comparing positions
@@ -438,32 +501,47 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
           anyPlaced = true;
         }
       }
-    } while (anyPlaced && pass < 3); // a couple of passes to fill more cells
+    } while (anyPlaced &&
+        pass < 2 &&
+        questions.length < _maxQuestions &&
+        !overBudget());
 
-    // Aggressive gap fill: iterate until no more placements or no unused cells remain
-    int extraPass = 0;
-    bool placedInExtra = true;
-    while (placedInExtra && extraPass < 6) {
-      extraPass++;
-      final beforeQNum = questionNumber;
-      questionNumber = _fillRemainingSlotsWithExactLengthWords(questionNumber);
-      placedInExtra = questionNumber != beforeQNum;
-      // stop early if fully packed
-      if (!_hasUnusedCells()) break;
+    // Fill exact-length gaps using remaining real questions until MAX is reached
+    if (questions.length < _maxQuestions && !overBudget()) {
+      int extraPass = 0;
+      bool placedInExtra = true;
+      while (placedInExtra &&
+          extraPass < 3 &&
+          questions.length < _maxQuestions &&
+          !overBudget()) {
+        extraPass++;
+        final beforeQNum = questionNumber;
+        questionNumber = _fillRemainingSlotsWithExactLengthWords(
+          questionNumber,
+          overBudget: overBudget,
+        );
+        placedInExtra = questionNumber != beforeQNum;
+        if (!_hasUnusedCells()) break;
+      }
     }
 
     // If still any unused cells remain, try one last mixed-direction pass
-    if (_hasUnusedCells()) {
+    if (_hasUnusedCells() &&
+        questions.length < _maxQuestions &&
+        !overBudget()) {
       final remainingEntries =
           allEligible
               .where((e) => !placedQuestionTexts.contains(e.key))
               .toList()
             ..shuffle(random);
       for (final entry in remainingEntries) {
-        final answer = entry.value.toUpperCase();
+        if (questions.length >= _maxQuestions) break;
+        if (overBudget()) break;
+        final answer = entry.value; // already uppercased above
         bool placed = false;
         for (final rc in _centerCells) {
           if (placed) break;
+          if (overBudget()) break;
           final r = rc[0], c = rc[1];
           // Try both orientations around center
           if (_canPlaceWord(answer, r, c, true)) {
@@ -476,7 +554,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
             placed = true;
           }
         }
-        if (placed) {
+        if (placed && questions.length < _maxQuestions) {
           questions.add(
             QuestionInfo(
               id: questionNumber,
@@ -495,49 +573,55 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       }
     }
 
-    // Final packing: aggressively fill any remaining empty slots with synthetic
-    // questions (length 1..9) so no neutral/empty cells remain.
-    int synthPass = 0;
-    bool progress = true;
-    while (progress && _hasUnusedCells() && synthPass < 8) {
-      synthPass++;
-      final before = questionNumber;
-      questionNumber = _fillRemainingSlotsWithExactLengthWords(
-        questionNumber,
-        allowSynthetic: true,
-      );
-      progress = questionNumber != before;
-    }
-
-    if (_hasUnusedCells()) {
-      questionNumber = _forceFillAllGaps(questionNumber);
-      // Try to improve symmetry by pairing single-letter synthetic words across vertical axis
-      _symmetricPolish();
-      // Absolute fallback: tile remaining empties with 1-letter words on a checkerboard
-      if (_hasUnusedCells()) {
-        questionNumber = _fillAllSinglesCheckerboard(questionNumber);
-        if (_hasUnusedCells()) {
-          // Try opposite parity to catch any missed cells
-          questionNumber = _fillAllSinglesCheckerboard(
-            questionNumber,
-            startOnOdd: true,
-          );
-        }
+    // If we couldn't reach the minimum with real words, allow limited synthetic fills
+    if (questions.length < _minQuestions &&
+        _hasUnusedCells() &&
+        !overBudget()) {
+      int synthPass = 0;
+      bool progress = true;
+      while (progress &&
+          _hasUnusedCells() &&
+          synthPass < 3 &&
+          questions.length < _minQuestions &&
+          !overBudget()) {
+        synthPass++;
+        final before = questionNumber;
+        questionNumber = _fillRemainingSlotsWithExactLengthWords(
+          questionNumber,
+          allowSynthetic: true,
+          overBudget: overBudget,
+        );
+        progress = questionNumber != before;
       }
     }
 
+    // If still below MIN, force-fill some gaps with synthetic words up to MIN
+    if (questions.length < _minQuestions && _hasUnusedCells()) {
+      questionNumber = _forceFillAllGaps(
+        questionNumber,
+        targetCountCap: _minQuestions,
+      );
+    }
+
+    // Convert any remaining empty cells to solid blocks to maximize block usage
+    _blockFillUnusedCells();
+
     // After placement, renumber questions so IDs start from top-left downward (LTR order)
     _renumberQuestionsSequentialLTR();
+    // Build render caches for fast grid painting
+    _rebuildRenderCaches();
   }
 
   // Try to place more words into exact-length empty slots (rows & columns)
   int _fillRemainingSlotsWithExactLengthWords(
     int startQuestionNumber, {
     bool allowSynthetic = false,
+    bool Function()? overBudget,
   }) {
     int questionNumber = startQuestionNumber;
     bool placedSomething;
     do {
+      if (overBudget != null && overBudget()) break;
       placedSomething = false;
 
       // Build remaining candidates grouped by length for quick lookup
@@ -588,6 +672,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       bool tryScanRows() {
         bool placed = false;
         for (int r = 0; r < 10; r++) {
+          if (questions.length >= _maxQuestions) break;
           int c = 0;
           while (c < 10) {
             // Find a run of empty letter cells (not walls/number cells)
@@ -613,6 +698,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                 if (pick != null) {
                   final ans = pick.value.toUpperCase();
                   if (_canPlaceWord(ans, r, startCol, true)) {
+                    if (questions.length >= _maxQuestions) {
+                      return placed; // guard
+                    }
                     _placeWord(ans, r, startCol, true, questionNumber);
                     questions.add(
                       QuestionInfo(
@@ -627,6 +715,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     _horizontalCount++;
                     placed = true;
                     placedSomething = true;
+                    if (questions.length >= _maxQuestions) {
+                      return placed;
+                    }
                   }
                 }
               }
@@ -639,6 +730,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       bool tryScanCols() {
         bool placed = false;
         for (int c = 0; c < 10; c++) {
+          if (questions.length >= _maxQuestions) break;
           int r = 0;
           while (r < 10) {
             while (r < 10 &&
@@ -661,6 +753,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                 if (pick != null) {
                   final ans = pick.value.toUpperCase();
                   if (_canPlaceWord(ans, startRow, c, false)) {
+                    if (questions.length >= _maxQuestions) {
+                      return placed; // guard
+                    }
                     _placeWord(ans, startRow, c, false, questionNumber);
                     questions.add(
                       QuestionInfo(
@@ -675,6 +770,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                     _verticalCount++;
                     placed = true;
                     placedSomething = true;
+                    if (questions.length >= _maxQuestions) {
+                      return placed;
+                    }
                   }
                 }
               }
@@ -699,17 +797,37 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     return questionNumber;
   }
 
+  // Mark all empty cells as solid blocks (reserved number cells) to maximize block usage
+  void _blockFillUnusedCells() {
+    for (int r = 0; r < 10; r++) {
+      for (int c = 0; c < 10; c++) {
+        if (grid[r][c].isEmpty) {
+          final key = '$r:$c';
+          if (!_numberCells.contains(key)) {
+            _numberCells.add(key);
+          }
+        }
+      }
+    }
+  }
+
   // Force-fill any remaining empty runs with synthetic words (horizontal first, then vertical)
-  int _forceFillAllGaps(int startQuestionNumber) {
+  int _forceFillAllGaps(
+    int startQuestionNumber, {
+    int targetCountCap = 1073741823,
+  }) {
     int qNum = startQuestionNumber;
+    bool stop = false;
 
     // Helper to place a synthetic word in a row segment [start..end]
     void fillRowRun(int r, int start, int end) {
+      if (stop) return;
       int len = end - start + 1;
       if (len <= 0) return;
       // Break long runs into segments of length <= 9
       int cursorEnd = end;
       while (cursorEnd >= start) {
+        if (stop) break;
         int segEnd = cursorEnd;
         int segStart = max(start, segEnd - 8); // upto length 9
         int segLen = segEnd - segStart + 1;
@@ -717,6 +835,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         int segStartCol = segStart - 1;
         final word = _generateSyntheticWord(segLen);
         if (_canPlaceWord(word, r, segStartCol, true)) {
+          if (questions.length >= targetCountCap) {
+            stop = true;
+            break;
+          }
           _placeWord(word, r, segStartCol, true, qNum);
           questions.add(
             QuestionInfo(
@@ -729,6 +851,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
           );
           _horizontalCount++;
           qNum++;
+          if (questions.length >= targetCountCap) {
+            stop = true;
+            break;
+          }
         }
         cursorEnd = segStart - 1;
       }
@@ -736,16 +862,22 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
     // Helper to place a synthetic word in a col segment [start..end]
     void fillColRun(int c, int start, int end) {
+      if (stop) return;
       int len = end - start + 1;
       if (len <= 0) return;
       int cursorEnd = end;
       while (cursorEnd >= start) {
+        if (stop) break;
         int segEnd = cursorEnd;
         int segStart = max(start, segEnd - 8);
         int segLen = segEnd - segStart + 1;
         int segStartRow = segStart - 1; // number cell above first letter
         final word = _generateSyntheticWord(segLen);
         if (_canPlaceWord(word, segStartRow, c, false)) {
+          if (questions.length >= targetCountCap) {
+            stop = true;
+            break;
+          }
           _placeWord(word, segStartRow, c, false, qNum);
           questions.add(
             QuestionInfo(
@@ -758,13 +890,17 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
           );
           _verticalCount++;
           qNum++;
+          if (questions.length >= targetCountCap) {
+            stop = true;
+            break;
+          }
         }
         cursorEnd = segStart - 1;
       }
     }
 
     // Pass 1: fill row runs
-    for (int r = 0; r < 10; r++) {
+    for (int r = 0; r < 10 && !stop; r++) {
       int c = 0;
       while (c < 10) {
         while (c < 10 &&
@@ -781,12 +917,13 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         int end = c - 1;
         if (end >= start) {
           fillRowRun(r, start, end);
+          if (stop) break;
         }
       }
     }
 
     // Pass 2: fill column runs
-    for (int c = 0; c < 10; c++) {
+    for (int c = 0; c < 10 && !stop; c++) {
       int r = 0;
       while (r < 10) {
         while (r < 10 &&
@@ -803,31 +940,12 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         int end = r - 1;
         if (end >= start) {
           fillColRun(c, start, end);
+          if (stop) break;
         }
       }
     }
 
     return qNum;
-  }
-
-  // Pair up remaining singles symmetrically around the vertical axis for a more natural look
-  void _symmetricPolish() {
-    // Mirror columns around center (col <-> 9-col)
-    for (int r = 0; r < 10; r++) {
-      for (int c = 0; c < 5; c++) {
-        final mc = 9 - c;
-        final keyL = '$r:$c';
-        final keyR = '$r:$mc';
-        final isEmptyL = grid[r][c].isEmpty && !_numberCells.contains(keyL);
-        final isEmptyR = grid[r][mc].isEmpty && !_numberCells.contains(keyR);
-        if (isEmptyL && !isEmptyR) {
-          // Try to clone a single-letter vertical word at left side
-          _placeSymmetricSingle(r, c);
-        } else if (!isEmptyL && isEmptyR) {
-          _placeSymmetricSingle(r, mc);
-        }
-      }
-    }
   }
 
   // When a question is answered correctly, replace underscores in its text with the actual answer.
@@ -841,106 +959,6 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     final replaced = text.replaceAll(regex, ' ${q.answer} ');
     // Normalize spaces at ends.
     return replaced.trim();
-  }
-
-  void _placeSymmetricSingle(int r, int c) {
-    // Try horizontal single letter with start cell to the right
-    const L = 1;
-    final word = _generateSyntheticWord(L);
-    // LTR: number cell to the left of the single
-    final startCol = c - 1;
-    if (_canPlaceWord(word, r, startCol, true)) {
-      final id = (questions.isEmpty ? 0 : questions.last.id) + 1;
-      _placeWord(word, r, startCol, true, id);
-      questions.add(
-        QuestionInfo(
-          id: id,
-          question: 'Added question (len 1)',
-          answer: word,
-          color: _getNextUniqueColor(),
-          horizontal: true,
-        ),
-      );
-      _horizontalCount++;
-      return;
-    }
-    // Try vertical single letter with start above
-    final startRow = r - 1;
-    if (_canPlaceWord(word, startRow, c, false)) {
-      final id = (questions.isEmpty ? 0 : questions.last.id) + 1;
-      _placeWord(word, startRow, c, false, id);
-      questions.add(
-        QuestionInfo(
-          id: id,
-          question: 'Added question (len 1)',
-          answer: word,
-          color: _getNextUniqueColor(),
-          horizontal: false,
-        ),
-      );
-      _verticalCount++;
-    }
-  }
-
-  // Fill all remaining empties using 1-letter synthetic words in a checkerboard pattern
-  int _fillAllSinglesCheckerboard(
-    int startQuestionNumber, {
-    bool startOnOdd = false,
-  }) {
-    int qNum = startQuestionNumber;
-    for (int r = 0; r < 10; r++) {
-      for (int c = 0; c < 10; c++) {
-        final parity = ((r + c) % 2 == 0);
-        if ((parity && startOnOdd) || (!parity && !startOnOdd)) continue;
-        if (grid[r][c].isNotEmpty || _numberCells.contains('$r:$c')) continue;
-        final word = _generateSyntheticWord(1);
-        // Prefer horizontal with start to the left if in-bounds (LTR)
-        final startCol = c - 1;
-        bool placed = false;
-        if (startCol >= 0 &&
-            grid[r][startCol].isEmpty &&
-            !_numberCells.contains('$r:$startCol')) {
-          if (_canPlaceWord(word, r, startCol, true)) {
-            _placeWord(word, r, startCol, true, qNum);
-            questions.add(
-              QuestionInfo(
-                id: qNum,
-                question: 'Added question (len 1)',
-                answer: word,
-                color: _getNextUniqueColor(),
-                horizontal: true,
-              ),
-            );
-            qNum++;
-            _horizontalCount++;
-            placed = true;
-          }
-        }
-        if (!placed) {
-          // Try vertical with start above
-          final startRow = r - 1;
-          if (startRow >= 0 &&
-              grid[startRow][c].isEmpty &&
-              !_numberCells.contains('$startRow:$c')) {
-            if (_canPlaceWord(word, startRow, c, false)) {
-              _placeWord(word, startRow, c, false, qNum);
-              questions.add(
-                QuestionInfo(
-                  id: qNum,
-                  question: 'Added question (len 1)',
-                  answer: word,
-                  color: _getNextUniqueColor(),
-                  horizontal: false,
-                ),
-              );
-              qNum++;
-              _verticalCount++;
-            }
-          }
-        }
-      }
-    }
-    return qNum;
   }
 
   // Generate a synthetic English word of given length (1..9) using common letters
@@ -1066,6 +1084,29 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         (q) => q.id == selectedQuestion,
       );
       if (currentQuestionIndex < 0) currentQuestionIndex = 0;
+    }
+  }
+
+  // Build caches for start cell lookup and letter owners per cell to speed up GridView.builder
+  void _rebuildRenderCaches() {
+    // Reset
+    for (int r = 0; r < 10; r++) {
+      for (int c = 0; c < 10; c++) {
+        _startQidGrid[r][c] = -1;
+        _ownersGrid[r][c].clear();
+      }
+    }
+    for (final q in questions) {
+      final pos = answerPositions[q.id];
+      if (pos == null || pos.isEmpty) continue;
+      // Start cell
+      final start = pos.first;
+      _startQidGrid[start.row][start.col] = q.id;
+      // Letter cells (1..)
+      for (int i = 1; i < pos.length; i++) {
+        final p = pos[i];
+        _ownersGrid[p.row][p.col].add(CellOwner(q.id, i));
+      }
     }
   }
 
@@ -2049,6 +2090,21 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                               padding: EdgeInsets.zero,
                               child: LayoutBuilder(
                                 builder: (context, constraints) {
+                                  if (_isGenerating) {
+                                    return Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
+                                          SizedBox(height: 8),
+                                          CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                          ),
+                                          SizedBox(height: 10),
+                                          Text('Generating puzzle…'),
+                                        ],
+                                      ),
+                                    );
+                                  }
                                   // Cache the exact grid cell size based on actual grid width
                                   const gridPadding =
                                       8.0; // Edge insets all(4) => 8 total
@@ -2076,18 +2132,10 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                         int row = index ~/ 10;
                                         int col = index % 10;
 
-                                        // Determine if this is a number cell (either a real question start or a neutral filler block)
+                                        // Determine if this is a start (number) cell via cache
                                         int? questionId;
-                                        for (var q in questions) {
-                                          final positions =
-                                              answerPositions[q.id];
-                                          if (positions != null &&
-                                              positions.first.row == row &&
-                                              positions.first.col == col) {
-                                            questionId = q.id;
-                                            break;
-                                          }
-                                        }
+                                        final startId = _startQidGrid[row][col];
+                                        if (startId != -1) questionId = startId;
 
                                         final bool isReservedNumberCell =
                                             _numberCells.contains('$row:$col');
@@ -2113,13 +2161,13 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                           displayText = questionId.toString();
                                           textColor = Colors.white;
                                         } else if (isReservedNumberCell) {
-                                          // Solid wall block – subtle glassy wall
+                                          // Solid wall block – make it visible on light backgrounds
                                           backgroundColor = isDark
                                               ? Colors.white.withValues(
                                                   alpha: 0.12,
                                                 )
-                                              : Colors.white.withValues(
-                                                  alpha: 0.25,
+                                              : Colors.black.withValues(
+                                                  alpha: 0.06,
                                                 );
                                           displayText = '';
                                           textColor = isDark
@@ -2130,34 +2178,24 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                         // Persist typed letters for ALL questions with white background.
                                         // If a cell belongs to any question path (letter cells) and that letter has been typed, show it.
                                         if (!isNumberCell) {
-                                          int? owningQId;
-                                          int?
-                                          letterIndex; // 1-based index within the answer path
-                                          for (final q in questions) {
-                                            final pos = answerPositions[q.id];
-                                            if (pos == null) continue;
-                                            final idx = pos.indexWhere(
-                                              (p) =>
-                                                  p.row == row && p.col == col,
-                                            );
-                                            if (idx > 0) {
-                                              // letter cells only (skip number cell at 0)
-                                              final userAns =
-                                                  currentAnswers[q.id] ?? '';
-                                              if (userAns.length >= idx) {
-                                                owningQId = q.id;
-                                                letterIndex = idx;
-                                                break; // take the first matching (overlaps should agree)
-                                              }
+                                          // Use owners cache; show the first owner with a typed character
+                                          final owners = _ownersGrid[row][col];
+                                          CellOwner? showOwner;
+                                          for (final owner in owners) {
+                                            final userAns =
+                                                currentAnswers[owner.qid] ?? '';
+                                            if (userAns.length >= owner.idx) {
+                                              showOwner = owner;
+                                              break;
                                             }
                                           }
 
-                                          if (owningQId != null &&
-                                              letterIndex != null) {
+                                          if (showOwner != null) {
                                             final userAns =
-                                                currentAnswers[owningQId] ?? '';
+                                                currentAnswers[showOwner.qid] ??
+                                                '';
                                             displayText =
-                                                userAns[letterIndex - 1];
+                                                userAns[showOwner.idx - 1];
                                             // Keep answer block base color scheme; in dark use a subtle glass tint
                                             backgroundColor = isDark
                                                 ? Colors.white.withValues(
@@ -2167,7 +2205,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                                     alpha: 0.9,
                                                   );
                                             final bool isCorrect =
-                                                (answeredCorrectly[owningQId] ==
+                                                (answeredCorrectly[showOwner
+                                                    .qid] ==
                                                 true);
                                             if (isCorrect && isDark) {
                                               // Darken correct blocks a bit in dark mode for modern contrast
@@ -2222,8 +2261,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                                                     ? Colors.white.withValues(
                                                         alpha: 0.18,
                                                       )
-                                                    : Colors.white.withValues(
-                                                        alpha: 0.35,
+                                                    : Colors.black.withValues(
+                                                        alpha: 0.12,
                                                       ),
                                                 width: 0.6,
                                               ),
@@ -2442,8 +2481,22 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                             answeredCorrectly[selectedQuestion] != true);
                         // Build a single-row strip of 10 buttons with 1px gaps
                         List<Widget> rowChildren = [];
-                        for (int i = 0; i < letterButtons.length; i++) {
-                          final letter = letterButtons[i];
+                        final buttons = letterButtons.isEmpty
+                            ? List<String>.from([
+                                'A',
+                                'B',
+                                'C',
+                                'D',
+                                'E',
+                                'F',
+                                'G',
+                                'H',
+                                'I',
+                                'J',
+                              ])
+                            : letterButtons;
+                        for (int i = 0; i < buttons.length; i++) {
+                          final letter = buttons[i];
                           rowChildren.add(
                             ElevatedButton(
                               onPressed: canInteract
@@ -2483,7 +2536,7 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
                               ),
                             ),
                           );
-                          if (i < letterButtons.length - 1) {
+                          if (i < buttons.length - 1) {
                             rowChildren.add(const SizedBox(width: 1));
                           }
                         }

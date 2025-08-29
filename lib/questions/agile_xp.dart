@@ -8,8 +8,6 @@ const Map<String, String> qAAgileXP = {
       "USERSTORY",
   "In Agile, a higher-level container grouping related stories toward a larger outcome is an _ _.":
       "EPIC",
-  "In Agile, good stories follow the mnemonic _ _ (Independent, Negotiable, Valuable, Estimable, Small, Testable).":
-      "INVEST",
   "In Agile, prioritizing by Must, Should, Could, Won’t uses the _ _ method.":
       "MOSCOW",
   "In Agile, collaborative effort estimation with numbered cards is planning _ _ .":
@@ -56,20 +54,12 @@ const Map<String, String> qAAgileXP = {
       "XFN",
   "In Agile, regularly inspecting how the team works and deciding improvements is the _ _.":
       "RETRO",
-  "In XP, the value emphasizing tackling hard problems, asking for help, and embracing change is _ _.":
-      "COURAGE",
   "In XP, the value emphasizing mutual regard and consideration among teammates is _ _.":
       "RESPECT",
   "In XP, having a real user available daily to clarify needs is the on-site _ _ practice.":
       "CUSTOMER",
-  "In XP, everyone following agreed naming, formatting, and patterns is coding _ _.":
-      "STANDARDS",
   "In XP, the guiding story that gives the system a shared conceptual model is the _ _.":
       "METAPHOR",
-  "In Agile teams, working at a sustainable pace to avoid burnout aims for steady _ _.":
-      "PACE",
-  "In Agile, the three Cs of a user story (Card, Conversation, Confirmation) are the _ _.":
-      "THREECS",
   "In Agile leadership, serving the team by removing blockers and enabling autonomy is _ _ leadership.":
       "SERVANT",
   "In flow-based systems, reducing waits and handoffs to keep work moving smoothly optimizes _ _.":

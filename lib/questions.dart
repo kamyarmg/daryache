@@ -6,6 +6,7 @@ import 'questions/c_cpp.dart';
 import 'questions/csharp.dart';
 import 'questions/data_structures.dart';
 import 'questions/design_patterns_gof.dart';
+import 'questions/devops.dart';
 import 'questions/divide_and_conquer.dart';
 import 'questions/driven_development.dart';
 import 'questions/java.dart';
@@ -41,4 +42,5 @@ final Map<String, String> qA = {
   ...qAJava,
   ...qAKotlin,
   ...qADesignPatternsGoF,
+  ...qDevOps,
 };

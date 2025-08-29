@@ -87,4 +87,78 @@ const Map<String, String> qAProgrammingLanguages = {
       "APL",
   "The language _ _ is used for numerical computing and data visualization; its name comes from 'matrix laboratory'.":
       "MATLAB",
+  "The language _ _ introduced classes and objects to programming in the 1960s at the Norwegian Computing Center.":
+      "SIMULA",
+  "The language _ _ (Algorithmic Language) from 1958/1960 heavily influenced block structure and syntax in later languages.":
+      "ALGOL",
+  "The language _ _ was designed by Niklaus Wirth as a modular successor to Pascal in the late 1970s.":
+      "MODULA2",
+  "The language _ _ by Martin Richards inspired B and indirectly C.": "BCPL",
+  "The language _ _ was created by Ken Thompson at Bell Labs as a simplified BCPL and predecessor to C.":
+      "B",
+  "The language _ _ pioneered Design by Contract under Bertrand Meyer in the 1980s.":
+      "EIFFEL",
+  "The language _ _ blended C with Smalltalk ideas; it was created by Brad Cox and Tom Love.":
+      "OBJECTIVEC",
+  "The language _ _ started as a successor to Turbo Pascal and became a popular RAD tool on Windows.":
+      "DELPHI",
+  "The stack-based language _ _ was created by Charles Moore in 1968 for embedded control.":
+      "FORTH",
+  "The text processing language _ _ from Aho, Weinberger, and Kernighan uses pattern-action rules.":
+      "AWK",
+  "The stream editor language _ _ performs scripted, noninteractive text transformations.":
+      "SED",
+  "The GNU shell _ _ was created by Brian Fox in 1989 as a free Bourne-compatible shell.":
+      "BASH",
+  "The shell _ _ by Paul Falstad (1990) added powerful completion and customization.":
+      "ZSH",
+  "The language _ _ was proposed in 2014 for Ethereum smart contracts.":
+      "SOLIDITY",
+  "The language _ _ is a Python-like smart contract language focused on security for Ethereum.":
+      "VYPER",
+  "The language _ _ (formerly Perl 6) adopted its new name in 2019 to separate from Perl 5.":
+      "RAKU",
+  "The language _ _ compiles to many targets and is used for games, web, and cross-platform apps.":
+      "HAXE",
+  "The language _ _ extended SNOBOL ideas with goal-directed evaluation.":
+      "ICON",
+  "The educational language _ _ introduced turtle graphics in the late 1960s.":
+      "LOGO",
+  "The language _ _ is a free MATLAB-compatible environment for numerical computing.":
+      "OCTAVE",
+  "The hardware description language _ _ was standardized by IEEE in 1987.":
+      "VHDL",
+  "The hardware description language _ _ originated at Gateway Design Automation and Cadence in the 1980s.":
+      "VERILOG",
+  "The language _ _ was introduced by Microsoft in 2017 for quantum computing.":
+      "QSHARP",
+  "The dependently typed language _ _ by Edwin Brady aims at practical software verification.":
+      "IDRIS",
+  "The dependently typed language _ _ is rooted in Martin-Lof type theory and is used for proofs.":
+      "AGDA",
+  "The language _ _ was designed by Niklaus Wirth after Modula-2, emphasizing simplicity and components.":
+      "OBERON",
+  "The language _ _ by Evan Czaplicki brings functional reactive programming to the browser.":
+      "ELM",
+  "The language _ _ from Facebook/Meta brought OCaml-style types to JavaScript development.":
+      "REASONML",
+  "The language _ _ is the proprietary symbolic language used in Mathematica.":
+      "WOLFRAM",
+  "The string manipulation language _ _ was created in the 1960s by Farber, Griswold, and Polonsky.":
+      "SNOBOL",
+  "IBM's 1960s attempt to unify scientific and business computing was _ _.":
+      "PLI",
+  "The low-level language _ _ predates high-level languages and is specific to CPU architectures.":
+      "ASSEMBLY",
+  "The language _ _ (Standard ML) had its formal Definition published in 1990.":
+      "SML",
+  "The experimental C++ successor proposed by Google in 2022 is _ _.": "CARBON",
+  "The page description language created at Adobe in 1982 is _ _.":
+      "POSTSCRIPT",
+  "The educational block-based language from MIT Media Lab launched in 2007 is _ _.":
+      "SCRATCH",
+  "The graphical dataflow language from National Instruments for instrumentation is _ _.":
+      "LABVIEW",
+  "The beginner-friendly DOS programming environment from Microsoft in 1991 was _ _.":
+      "QBASIC",
 };

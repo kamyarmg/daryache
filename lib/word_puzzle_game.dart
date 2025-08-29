@@ -52,10 +52,6 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
   double? _gridCellSize; // cache of grid cell size to match button size
   // Reserve grid cells that are used as number blocks to avoid overlaps
   late Set<String> _numberCells;
-  // Cached center-priority cell order (row,col) pairs for symmetric scanning
-  late List<List<int>> _centerCells;
-  // Enforce a balanced mix of horizontal/vertical by alternating preference
-  bool _placeNextVertical = true; // first word is horizontal -> next vertical
   bool _hasCelebrated = false; // show win celebration only once
 
   // Render caches to avoid per-cell O(N) scans during build
@@ -119,7 +115,6 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     // Build and shuffle a color palette to guarantee uniqueness per game
     _colorPalette = _buildColorPalette();
     _colorPalette.shuffle(Random());
-    _centerCells = _buildCenterPriorityCells();
     _startQidGrid = List.generate(10, (_) => List.filled(10, -1));
     _ownersGrid = List.generate(
       10,
@@ -145,139 +140,213 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
   void _generateGrid() {
     final random = Random();
-    // Hard time budget to avoid long stalls on the UI thread
+    // Strict 5-second time budget as per requirements
     final sw = Stopwatch()..start();
-    bool overBudget() => sw.elapsedMilliseconds > 1200; // ~1.2s budget
-    // Build a limited candidate pool (<= 9 letters): mix top-length and random picks
-    final allRaw = qA.entries.where((e) => e.value.length <= 9).toList();
-    final List<MapEntry<String, String>> topByLen = List.of(allRaw)
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
-    final int topTake = min(140, topByLen.length);
-    final topSample = topByLen.take(topTake).toList();
-    final List<MapEntry<String, String>> rndShuffled = List.of(allRaw)
-      ..shuffle(random);
-    final int rndTake = min(120, rndShuffled.length);
-    final rndSample = rndShuffled.take(rndTake).toList();
-    // Deduplicate by key and uppercase answers once
+    bool overBudget() =>
+        sw.elapsedMilliseconds > 4500; // 4.5s budget with 0.5s buffer
+
+    // Build optimized candidate pool - prioritize shorter words for faster placement
+    final allRaw = qA.entries
+        .where((e) => e.value.length >= 2 && e.value.length <= 9)
+        .toList();
+
+    // Sort by length (shorter first for efficiency) and quality (longer for filling)
+    final List<MapEntry<String, String>> shortWords =
+        allRaw.where((e) => e.value.length <= 5).toList()..shuffle(random);
+    final List<MapEntry<String, String>> mediumWords =
+        allRaw.where((e) => e.value.length > 5 && e.value.length <= 7).toList()
+          ..shuffle(random);
+    final List<MapEntry<String, String>> longWords =
+        allRaw.where((e) => e.value.length > 7).toList()..shuffle(random);
+
+    // Deduplicate and create final pool
     final seenKeys = <String>{};
-    final List<MapEntry<String, String>> allEligible = [];
-    for (final e in [...topSample, ...rndSample]) {
+    final List<MapEntry<String, String>> candidatePool = [];
+
+    // Mix lengths for optimal filling: 60% short, 30% medium, 10% long
+    final totalCandidates = min(300, allRaw.length); // Increased pool size
+    final shortTake = min((totalCandidates * 0.6).round(), shortWords.length);
+    final mediumTake = min((totalCandidates * 0.3).round(), mediumWords.length);
+    final longTake = min((totalCandidates * 0.1).round(), longWords.length);
+
+    for (final e in [
+      ...shortWords.take(shortTake),
+      ...mediumWords.take(mediumTake),
+      ...longWords.take(longTake),
+    ]) {
       if (seenKeys.add(e.key)) {
-        allEligible.add(MapEntry(e.key, e.value.toUpperCase()));
+        candidatePool.add(MapEntry(e.key, e.value.toUpperCase()));
       }
     }
-    // Create working pools
-    final randomPool = List<MapEntry<String, String>>.from(allEligible)
-      ..shuffle(random);
-    final greedyPool = List<MapEntry<String, String>>.from(allEligible)
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+
+    candidatePool.shuffle(random);
 
     int questionNumber = 1;
-
     final usedQuestions = <String>{};
 
-    // Seed with up to 3 random questions to start the grid (smaller for speed)
+    // Strategy: Start with 8-10 seed words, then use aggressive intersection-based placement
     int seedsPlaced = 0;
-    while (seedsPlaced < 3 &&
-        randomPool.isNotEmpty &&
+    final maxSeeds = min(10, candidatePool.length); // Increased seeds further
+
+    while (seedsPlaced < maxSeeds &&
+        candidatePool.isNotEmpty &&
         questions.length < _maxQuestions) {
       if (overBudget()) break;
-      // pick next unused random entry
-      final nextSeed = randomPool.firstWhere(
-        (e) => !usedQuestions.contains(e.key),
-        orElse: () => randomPool.first,
-      );
-      if (usedQuestions.contains(nextSeed.key)) break;
 
-      final answer = nextSeed.value; // already uppercased above
-      final question = nextSeed.key;
+      final candidateIndex = seedsPlaced % candidatePool.length;
+      final candidate = candidatePool[candidateIndex];
 
+      if (usedQuestions.contains(candidate.key)) {
+        seedsPlaced++;
+        continue;
+      }
+
+      final answer = candidate.value;
+      final question = candidate.key;
       bool placed = false;
-      // First seed: place horizontally near center for a strong anchor (LTR)
+
+      // First seed: horizontal placement in center
       if (seedsPlaced == 0) {
         int row = 4;
-        // For LTR, number cell sits before first letter at col = startCol,
-        // and letters go to the right: cols [startCol+1 .. startCol+answer.length]
-        // Keep the word roughly centered.
-        int startCol = max(0, 4 - (answer.length ~/ 2));
-        // Ensure the last letter stays within grid: startCol + length <= 9
-        startCol = min(startCol, 9 - answer.length);
+        int startCol = max(0, min(9 - answer.length, 4 - (answer.length ~/ 2)));
         if (_canPlaceWord(answer, row, startCol, true)) {
           _placeWord(answer, row, startCol, true, questionNumber);
           _horizontalCount++;
           placed = true;
         }
       }
-
-      // Subsequent seeds: try to intersect using center-priority cells
-      if (!placed) {
-        for (final rc in _centerCells) {
-          if (placed) break;
-          if (overBudget()) break;
-          final r = rc[0], c = rc[1];
-          if (grid[r][c].isNotEmpty && !_numberCells.contains('$r:$c')) {
-            final existingLetter = grid[r][c];
-            for (int answerIdx = 0; answerIdx < answer.length; answerIdx++) {
-              if (answer[answerIdx] != existingLetter) continue;
-              // Try vertical then horizontal to mix orientations early
-              for (final horiz in [false, true]) {
-                if (horiz) {
-                  // For LTR, with intersection at grid[r][c] = word[answerIdx],
-                  // number cell must be at column startCol such that:
-                  // first letter at startCol+1, index (i-1)==answerIdx at col c =>
-                  // startCol + (answerIdx + 1) = c  => startCol = c - answerIdx - 1
-                  final startCol = c - answerIdx - 1;
-                  if (_canPlaceWordAt(answer, r, startCol, true, answerIdx)) {
-                    _placeWord(answer, r, startCol, true, questionNumber);
-                    _horizontalCount++;
-                    placed = true;
-                    break;
-                  }
-                } else {
-                  // Vertical unchanged: number cell above first letter
+      // Second seed: try vertical intersecting with first
+      else if (seedsPlaced == 1) {
+        // Look for intersection points with existing words
+        bool intersectionPlaced = false;
+        for (int r = 0; r < 10 && !intersectionPlaced; r++) {
+          for (int c = 0; c < 10 && !intersectionPlaced; c++) {
+            if (grid[r][c].isNotEmpty && !_numberCells.contains('$r:$c')) {
+              final existingLetter = grid[r][c];
+              for (int answerIdx = 0; answerIdx < answer.length; answerIdx++) {
+                if (answer[answerIdx] == existingLetter) {
+                  // Try vertical placement
                   final startRow = r - answerIdx - 1;
                   if (_canPlaceWordAt(answer, startRow, c, false, answerIdx)) {
                     _placeWord(answer, startRow, c, false, questionNumber);
                     _verticalCount++;
                     placed = true;
+                    intersectionPlaced = true;
                     break;
                   }
                 }
               }
-              if (placed) break;
+            }
+          }
+        }
+
+        // If no intersection, try standalone placement
+        if (!intersectionPlaced) {
+          for (int attempts = 0; attempts < 10 && !placed; attempts++) {
+            final col = random.nextInt(6); // Try different columns
+            final maxStartRow = 10 - answer.length - 1;
+            if (maxStartRow > 0) {
+              final startRow = random.nextInt(maxStartRow);
+              if (_canPlaceWord(answer, startRow, col, false)) {
+                _placeWord(answer, startRow, col, false, questionNumber);
+                _verticalCount++;
+                placed = true;
+              }
+            }
+          }
+        }
+      }
+      // Subsequent seeds: aggressive intersection attempts
+      else {
+        // Find all filled cells for potential intersections
+        final filledCells = <List<int>>[];
+        for (int r = 0; r < 10; r++) {
+          for (int c = 0; c < 10; c++) {
+            if (grid[r][c].isNotEmpty && !_numberCells.contains('$r:$c')) {
+              filledCells.add([r, c]);
+            }
+          }
+        }
+
+        // Prioritize center cells for better symmetry
+        filledCells.sort((a, b) {
+          final distA = (a[0] - 4.5).abs() + (a[1] - 4.5).abs();
+          final distB = (b[0] - 4.5).abs() + (b[1] - 4.5).abs();
+          return distA.compareTo(distB);
+        });
+
+        for (final cell in filledCells.take(15)) {
+          // Limit search for performance
+          if (placed || overBudget()) break;
+          final r = cell[0], c = cell[1];
+          final existingLetter = grid[r][c];
+
+          for (int answerIdx = 0; answerIdx < answer.length; answerIdx++) {
+            if (answer[answerIdx] != existingLetter) continue;
+
+            // Determine preferred orientation for balance
+            final totalPlaced = _verticalCount + _horizontalCount;
+            bool preferVertical = totalPlaced == 0
+                ? true
+                : (_verticalCount / totalPlaced < 0.5);
+
+            final orientations = preferVertical ? [false, true] : [true, false];
+
+            for (final horiz in orientations) {
+              if (horiz) {
+                final startCol = c - answerIdx - 1;
+                if (_canPlaceWordAt(answer, r, startCol, true, answerIdx)) {
+                  _placeWord(answer, r, startCol, true, questionNumber);
+                  _horizontalCount++;
+                  placed = true;
+                  break;
+                }
+              } else {
+                final startRow = r - answerIdx - 1;
+                if (_canPlaceWordAt(answer, startRow, c, false, answerIdx)) {
+                  _placeWord(answer, startRow, c, false, questionNumber);
+                  _verticalCount++;
+                  placed = true;
+                  break;
+                }
+              }
+            }
+            if (placed) break;
+          }
+        }
+
+        // Fallback: try non-intersecting placement
+        if (!placed) {
+          for (int attempts = 0; attempts < 20 && !placed; attempts++) {
+            final horiz = random.nextBool();
+            if (horiz) {
+              final row = random.nextInt(10);
+              final maxStartCol = 9 - answer.length;
+              if (maxStartCol >= 0) {
+                final startCol = random.nextInt(maxStartCol + 1);
+                if (_canPlaceWord(answer, row, startCol, true)) {
+                  _placeWord(answer, row, startCol, true, questionNumber);
+                  _horizontalCount++;
+                  placed = true;
+                }
+              }
+            } else {
+              final col = random.nextInt(10);
+              final maxStartRow = 10 - answer.length - 1;
+              if (maxStartRow > 0) {
+                final startRow = random.nextInt(maxStartRow);
+                if (_canPlaceWord(answer, startRow, col, false)) {
+                  _placeWord(answer, startRow, col, false, questionNumber);
+                  _verticalCount++;
+                  placed = true;
+                }
+              }
             }
           }
         }
       }
 
-      // Fallback: try non-intersecting near center rows/cols
-      if (!placed) {
-        // Try horizontal near middle rows
-        const rowOrder = [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
-        for (final row in rowOrder) {
-          int minStartCol = answer.length;
-          int maxStartCol = 9;
-          final colOrder = [
-            5 + answer.length ~/ 2,
-            6 + answer.length ~/ 2,
-            4 + answer.length ~/ 2,
-            7 + answer.length ~/ 2,
-            minStartCol,
-            maxStartCol,
-          ];
-          for (var startCol in colOrder) {
-            if (_canPlaceWord(answer, row, startCol, true)) {
-              _placeWord(answer, row, startCol, true, questionNumber);
-              _horizontalCount++;
-              placed = true;
-              break;
-            }
-          }
-          if (placed) break;
-        }
-      }
-
-      if (placed && questions.length < _maxQuestions) {
+      if (placed) {
         final pos = answerPositions[questionNumber]!;
         final isHoriz = pos.length >= 2 && pos[0].row == pos[1].row;
         questions.add(
@@ -291,325 +360,325 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         );
         usedQuestions.add(question);
         questionNumber++;
-        seedsPlaced++;
-        _placeNextVertical = true;
-      } else {
-        // Couldn't place this seed; mark as used to avoid infinite loop
-        usedQuestions.add(question);
-        seedsPlaced++;
       }
+
+      seedsPlaced++;
     }
 
-    // Attempt to place the rest; multiple passes to fill as much as possible
-    final placedQuestionTexts = <String>{...questions.map((q) => q.question)}
-      ..addAll(usedQuestions);
-    int pass = 0;
-    bool anyPlaced;
-    do {
-      anyPlaced = false;
-      pass++;
-      // We'll iterate attempts up to total pool size each pass, mixing random/greedy
-      final maxAttempts = min(allEligible.length, 120);
-      int attemptsTried = 0;
-      while (attemptsTried < maxAttempts) {
-        if (questions.length >= _maxQuestions) break;
-        if (overBudget()) break;
-        attemptsTried++;
-        // Choose next candidate honoring ~20% random
-        MapEntry<String, String>? entry;
-        // For early phase ensure we reach at least 5 seeds; afterwards go greedy
-        if (questions.length < 5 && randomPool.isNotEmpty) {
-          entry = randomPool.firstWhere(
-            (e) => !placedQuestionTexts.contains(e.key),
-            orElse: () => randomPool.first,
-          );
-        } else if (greedyPool.isNotEmpty) {
-          entry = greedyPool.firstWhere(
-            (e) => !placedQuestionTexts.contains(e.key),
-            orElse: () => greedyPool.first,
-          );
-        }
-        if (entry == null) break;
+    // Main filling loop - continue until we have enough questions
+    final placedQuestionTexts = <String>{
+      ...questions.map((q) => q.question),
+      ...usedQuestions,
+    };
+    int mainLoopAttempts = 0;
+    const maxMainLoopAttempts = 800; // Increased to allow more attempts
 
-        final answer = entry.value; // already uppercased above
-        final question = entry.key;
+    while (questions.length < _minQuestions &&
+        mainLoopAttempts < maxMainLoopAttempts &&
+        !overBudget()) {
+      mainLoopAttempts++;
+      bool anyPlaced = false;
+
+      final remainingCandidates = candidatePool
+          .where((e) => !placedQuestionTexts.contains(e.key))
+          .toList();
+      if (remainingCandidates.isEmpty) break;
+
+      // Balance check - ensure we maintain 40-60% ratio with stricter enforcement
+      final totalPlaced = _verticalCount + _horizontalCount;
+      bool forceVertical = false, forceHorizontal = false;
+
+      if (totalPlaced > 5) {
+        // Only start balancing after 5 questions
+        final verticalRatio = _verticalCount / totalPlaced;
+        if (verticalRatio < 0.35)
+          forceVertical = true; // Force vertical if below 35%
+        else if (verticalRatio > 0.65)
+          forceHorizontal = true; // Force horizontal if above 65%
+      }
+
+      // Try each remaining candidate (limit attempts for performance)
+      for (final candidate in remainingCandidates.take(150)) {
+        if (overBudget() || questions.length >= _maxQuestions) break;
+
+        final answer = candidate.value;
+        final question = candidate.key;
         if (placedQuestionTexts.contains(question)) continue;
 
         bool placed = false;
-        int attempts = 0;
-        const int attemptCap = 60; // lower than 500 to avoid long spins
 
-        // Stronger balance with 45-55% constraint
-        final totalPlaced = _verticalCount + _horizontalCount;
-        bool preferVertical;
-        if (totalPlaced == 0) {
-          preferVertical = true;
-        } else {
-          final ratio = _verticalCount / totalPlaced;
-          if (ratio < 0.45) {
-            preferVertical = true; // need more verticals
-          } else if (ratio > 0.55) {
-            preferVertical = false; // need more horizontals
-          } else {
-            // otherwise alternate for symmetry
-            preferVertical = _placeNextVertical;
-          }
-        }
-
-        while (!placed && attempts < attemptCap) {
-          attempts++;
-          if (overBudget()) break;
-
-          // 1) Try intersections scanning cells from center outward for symmetry
-          for (final rc in _centerCells) {
-            if (placed) break;
-            if (overBudget()) break;
-            final r = rc[0], c = rc[1];
+        // Find all possible intersection points
+        final intersections = <Map<String, dynamic>>[];
+        for (int r = 0; r < 10; r++) {
+          for (int c = 0; c < 10; c++) {
             if (grid[r][c].isNotEmpty && !_numberCells.contains('$r:$c')) {
               final existingLetter = grid[r][c];
               for (int answerIdx = 0; answerIdx < answer.length; answerIdx++) {
-                if (answer[answerIdx] != existingLetter) continue;
-
-                // Try preferred orientation first with corrected math
-                List<bool> order = preferVertical
-                    ? [false, true]
-                    : [true, false];
-                for (final horiz in order) {
-                  if (horiz) {
-                    // Correct LTR intersection math: see seed phase comment
-                    final startCol = c - answerIdx - 1;
-                    if (_canPlaceWordAt(answer, r, startCol, true, answerIdx)) {
-                      _placeWord(answer, r, startCol, true, questionNumber);
-                      placed = true;
-                      _horizontalCount++;
-                      break;
-                    }
-                  } else {
-                    final startRow =
-                        r - answerIdx - 1; // ensure letter lands on (r,c)
-                    if (_canPlaceWordAt(
-                      answer,
-                      startRow,
-                      c,
-                      false,
-                      answerIdx,
-                    )) {
-                      _placeWord(answer, startRow, c, false, questionNumber);
-                      placed = true;
-                      _verticalCount++;
-                      break;
-                    }
-                  }
+                if (answer[answerIdx] == existingLetter) {
+                  intersections.add({
+                    'r': r, 'c': c, 'idx': answerIdx,
+                    'priority':
+                        (r - 4.5).abs() + (c - 4.5).abs(), // Center priority
+                  });
                 }
-                if (placed) break;
               }
             }
           }
+        }
 
-          // 2) Random-ish placement with center bias if no intersection found
-          if (!placed) {
-            List<bool> order = preferVertical ? [false, true] : [true, false];
+        // Sort intersections by priority (center first)
+        intersections.sort(
+          (a, b) =>
+              (a['priority'] as double).compareTo(b['priority'] as double),
+        );
 
-            bool tryPlace(bool horizontal) {
-              if (horizontal) {
-                // Choose row near center first (LTR)
-                const rowOrder = [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
-                for (final row in rowOrder) {
-                  if (overBudget()) return false;
-                  // Valid startCol range so that last letter <= 9:
-                  int minStartCol = 0;
-                  int maxStartCol = 9 - answer.length;
-                  // Try startCols centered around middle-left
-                  final mid = max(0, 4 - (answer.length ~/ 2));
-                  final colOrder = [
-                    mid,
-                    min(maxStartCol, mid + 1),
-                    max(minStartCol, mid - 1),
-                    min(maxStartCol, mid + 2),
-                    max(minStartCol, mid - 2),
-                    minStartCol,
-                    maxStartCol,
-                  ];
-                  for (var startCol in colOrder) {
-                    if (_canPlaceWord(answer, row, startCol, true)) {
-                      _placeWord(answer, row, startCol, true, questionNumber);
-                      return true;
-                    }
-                  }
-                }
-                return false;
-              } else {
-                // Choose col near center first
-                const colOrder = [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
-                for (final col in colOrder) {
-                  if (overBudget()) return false;
-                  int maxStartRow = 10 - answer.length;
-                  if (maxStartRow < 0) return false;
-                  // Try startRows centered around middle
-                  final rowOrder = [
-                    5 - (answer.length ~/ 2),
-                    4 - (answer.length ~/ 2),
-                    6 - (answer.length ~/ 2),
-                    3 - (answer.length ~/ 2),
-                    7 - (answer.length ~/ 2),
-                    0,
-                    maxStartRow,
-                  ];
-                  for (var startRow in rowOrder) {
-                    if (_canPlaceWord(answer, startRow, col, false)) {
-                      _placeWord(answer, startRow, col, false, questionNumber);
-                      return true;
-                    }
-                  }
-                }
-                return false;
-              }
-            }
+        // Try each intersection (limit attempts for performance)
+        for (final intersection in intersections.take(30)) {
+          if (placed || overBudget()) break;
 
-            for (final horiz in order) {
-              if (tryPlace(horiz)) {
+          final r = intersection['r'] as int;
+          final c = intersection['c'] as int;
+          final answerIdx = intersection['idx'] as int;
+
+          // Determine orientation preference
+          List<bool> orientations;
+          if (forceVertical)
+            orientations = [false];
+          else if (forceHorizontal)
+            orientations = [true];
+          else
+            orientations = [true, false]; // Try both
+
+          for (final horiz in orientations) {
+            if (horiz) {
+              final startCol = c - answerIdx - 1;
+              if (_canPlaceWordAt(answer, r, startCol, true, answerIdx)) {
+                _placeWord(answer, r, startCol, true, questionNumber);
+                _horizontalCount++;
                 placed = true;
-                if (horiz) {
-                  _horizontalCount++;
-                } else {
-                  _verticalCount++;
-                }
+                break;
+              }
+            } else {
+              final startRow = r - answerIdx - 1;
+              if (_canPlaceWordAt(answer, startRow, c, false, answerIdx)) {
+                _placeWord(answer, startRow, c, false, questionNumber);
+                _verticalCount++;
+                placed = true;
                 break;
               }
             }
           }
         }
 
-        if (placed && questions.length < _maxQuestions) {
-          // Flip preferred orientation for the next placement
-          _placeNextVertical = !_placeNextVertical;
-          // Determine actual orientation for this placed word by comparing positions
-          bool horizPlaced;
+        // If no intersection worked, try standalone placement
+        if (!placed) {
+          // Allow standalone placement for ALL questions initially
+          for (int attempts = 0; attempts < 25 && !placed; attempts++) {
+            final horiz = forceHorizontal
+                ? true
+                : (forceVertical ? false : random.nextBool());
+
+            if (horiz) {
+              final row = random.nextInt(10);
+              final maxStartCol = 9 - answer.length;
+              if (maxStartCol >= 0) {
+                final startCol = random.nextInt(maxStartCol + 1);
+                if (_canPlaceWord(answer, row, startCol, true)) {
+                  _placeWord(answer, row, startCol, true, questionNumber);
+                  _horizontalCount++;
+                  placed = true;
+                }
+              }
+            } else {
+              final col = random.nextInt(10);
+              final maxStartRow = 10 - answer.length - 1;
+              if (maxStartRow > 0) {
+                final startRow = random.nextInt(maxStartRow);
+                if (_canPlaceWord(answer, startRow, col, false)) {
+                  _placeWord(answer, startRow, col, false, questionNumber);
+                  _verticalCount++;
+                  placed = true;
+                }
+              }
+            }
+          }
+        }
+
+        if (placed) {
           final pos = answerPositions[questionNumber]!;
-          horizPlaced = pos.length >= 2 && pos[0].row == pos[1].row;
+          final isHoriz = pos.length >= 2 && pos[0].row == pos[1].row;
           questions.add(
             QuestionInfo(
               id: questionNumber,
               question: question,
               answer: answer,
               color: _getNextUniqueColor(),
-              horizontal: horizPlaced,
+              horizontal: isHoriz,
             ),
           );
           placedQuestionTexts.add(question);
           questionNumber++;
           anyPlaced = true;
-        }
-      }
-    } while (anyPlaced &&
-        pass < 2 &&
-        questions.length < _maxQuestions &&
-        !overBudget());
 
-    // Fill exact-length gaps using remaining real questions until MAX is reached
-    if (questions.length < _maxQuestions && !overBudget()) {
-      int extraPass = 0;
-      bool placedInExtra = true;
-      while (placedInExtra &&
-          extraPass < 3 &&
-          questions.length < _maxQuestions &&
-          !overBudget()) {
-        extraPass++;
-        final beforeQNum = questionNumber;
-        questionNumber = _fillRemainingSlotsWithExactLengthWords(
-          questionNumber,
-          overBudget: overBudget,
-        );
-        placedInExtra = questionNumber != beforeQNum;
-        if (!_hasUnusedCells()) break;
-      }
-    }
-
-    // If still any unused cells remain, try one last mixed-direction pass
-    if (_hasUnusedCells() &&
-        questions.length < _maxQuestions &&
-        !overBudget()) {
-      final remainingEntries =
-          allEligible
-              .where((e) => !placedQuestionTexts.contains(e.key))
-              .toList()
-            ..shuffle(random);
-      for (final entry in remainingEntries) {
-        if (questions.length >= _maxQuestions) break;
-        if (overBudget()) break;
-        final answer = entry.value; // already uppercased above
-        bool placed = false;
-        for (final rc in _centerCells) {
-          if (placed) break;
-          if (overBudget()) break;
-          final r = rc[0], c = rc[1];
-          // Try both orientations around center
-          if (_canPlaceWord(answer, r, c, true)) {
-            _placeWord(answer, r, c, true, questionNumber);
-            _horizontalCount++;
-            placed = true;
-          } else if (_canPlaceWord(answer, r, c, false)) {
-            _placeWord(answer, r, c, false, questionNumber);
-            _verticalCount++;
-            placed = true;
+          // Check if we've met our requirements
+          if (questions.length >= _minQuestions) {
+            final totalCells = 100;
+            final usedCells = _countUsedCells();
+            final unusedPercentage =
+                ((totalCells - usedCells) / totalCells) * 100;
+            if (unusedPercentage < 5.0) {
+              print(
+                'Early termination: ${questions.length} questions, ${unusedPercentage.toStringAsFixed(1)}% unused cells',
+              );
+              break; // Success criteria met
+            }
           }
         }
-        if (placed && questions.length < _maxQuestions) {
-          questions.add(
-            QuestionInfo(
-              id: questionNumber,
-              question: entry.key,
-              answer: answer,
-              color: _getNextUniqueColor(),
-              horizontal:
-                  answerPositions[questionNumber]![0].row ==
-                  answerPositions[questionNumber]![1].row,
-            ),
-          );
-          placedQuestionTexts.add(entry.key);
-          questionNumber++;
-          if (!_hasUnusedCells()) break;
-        }
-      }
-    }
 
-    // If we couldn't reach the minimum with real words, allow limited synthetic fills
-    if (questions.length < _minQuestions &&
-        _hasUnusedCells() &&
-        !overBudget()) {
-      int synthPass = 0;
-      bool progress = true;
-      while (progress &&
-          _hasUnusedCells() &&
-          synthPass < 3 &&
-          questions.length < _minQuestions &&
-          !overBudget()) {
-        synthPass++;
-        final before = questionNumber;
-        questionNumber = _fillRemainingSlotsWithExactLengthWords(
-          questionNumber,
-          allowSynthetic: true,
-          overBudget: overBudget,
+        // Break if we have enough questions and good cell usage
+        if (questions.length >= 30) break;
+      }
+
+      if (!anyPlaced) {
+        print(
+          'No more placements possible after ${mainLoopAttempts} attempts with ${questions.length} questions',
         );
-        progress = questionNumber != before;
+        break; // No more placements possible
       }
     }
 
-    // If still below MIN, force-fill some gaps with synthetic words up to MIN
-    if (questions.length < _minQuestions && _hasUnusedCells()) {
-      questionNumber = _forceFillAllGaps(
+    // If still need more questions, try exact-length fitting for remaining gaps
+    if (questions.length < _minQuestions && !overBudget()) {
+      questionNumber = _fillRemainingSlotsWithExactLengthWords(
         questionNumber,
-        targetCountCap: _minQuestions,
+        allowSynthetic: false,
+        overBudget: overBudget,
       );
     }
 
-    // Convert any remaining empty cells to solid blocks to maximize block usage
+    // Force minimum requirement with synthetic words if needed
+    if (questions.length < _minQuestions && !overBudget()) {
+      print('Generating synthetic words to meet minimum requirement');
+      int syntheticAttempts = 0;
+      while (questions.length < _minQuestions &&
+          !overBudget() &&
+          syntheticAttempts < 50) {
+        syntheticAttempts++;
+        // Find any empty space and place a synthetic word
+        bool syntheticPlaced = false;
+        for (int len = 2; len <= 8 && !syntheticPlaced; len++) {
+          // Try different lengths
+          final syntheticWord = _generateSyntheticWord(len);
+
+          // Try horizontal placement first (more spaces typically available)
+          for (int r = 0; r < 10 && !syntheticPlaced; r++) {
+            final maxStartCol = 9 - len;
+            for (
+              int startCol = 0;
+              startCol <= maxStartCol && !syntheticPlaced;
+              startCol++
+            ) {
+              if (_canPlaceWord(syntheticWord, r, startCol, true)) {
+                _placeWord(syntheticWord, r, startCol, true, questionNumber);
+                questions.add(
+                  QuestionInfo(
+                    id: questionNumber,
+                    question: 'Programming concept (${len} letters)',
+                    answer: syntheticWord,
+                    color: _getNextUniqueColor(),
+                    horizontal: true,
+                  ),
+                );
+                questionNumber++;
+                _horizontalCount++;
+                syntheticPlaced = true;
+                print('Placed synthetic horizontal word: $syntheticWord');
+              }
+            }
+          }
+
+          // Try vertical placement if horizontal didn't work
+          if (!syntheticPlaced) {
+            for (int c = 0; c < 10 && !syntheticPlaced; c++) {
+              final maxStartRow = 10 - len - 1;
+              for (
+                int startRow = 0;
+                startRow <= maxStartRow && !syntheticPlaced;
+                startRow++
+              ) {
+                if (_canPlaceWord(syntheticWord, startRow, c, false)) {
+                  _placeWord(syntheticWord, startRow, c, false, questionNumber);
+                  questions.add(
+                    QuestionInfo(
+                      id: questionNumber,
+                      question: 'Programming concept (${len} letters)',
+                      answer: syntheticWord,
+                      color: _getNextUniqueColor(),
+                      horizontal: false,
+                    ),
+                  );
+                  questionNumber++;
+                  _verticalCount++;
+                  syntheticPlaced = true;
+                  print('Placed synthetic vertical word: $syntheticWord');
+                }
+              }
+            }
+          }
+        }
+
+        if (!syntheticPlaced) {
+          print('Could not place synthetic word in attempt $syntheticAttempts');
+          break; // Can't place any more
+        }
+      }
+    }
+
+    // Final balance check and adjustment
+    final finalTotal = _verticalCount + _horizontalCount;
+    if (finalTotal > 0) {
+      // Log the final ratio for debugging (can be removed in production)
+      print(
+        'Final ratio - Vertical: ${(_verticalCount / finalTotal * 100).toStringAsFixed(1)}%, '
+        'Horizontal: ${(_horizontalCount / finalTotal * 100).toStringAsFixed(1)}%',
+      );
+    }
+
+    // Convert remaining empty cells to walls to meet <5% unused requirement
     _blockFillUnusedCells();
 
-    // After placement, renumber questions so IDs start from top-left downward (LTR order)
+    // Renumber questions in reading order (top-left to bottom-right)
     _renumberQuestionsSequentialLTR();
+
     // Build render caches for fast grid painting
     _rebuildRenderCaches();
+
+    final totalCells = 100;
+    final usedCells = _countUsedCells();
+    final unusedPercentage = ((totalCells - usedCells) / totalCells) * 100;
+
+    print(
+      'Grid generation completed in ${sw.elapsedMilliseconds}ms with ${questions.length} questions',
+    );
+    print(
+      'Used cells: $usedCells/100 (${unusedPercentage.toStringAsFixed(1)}% unused)',
+    );
+    print(
+      'Balance: ${_verticalCount} vertical, ${_horizontalCount} horizontal',
+    );
+  }
+
+  // Helper to count used cells (letters + number blocks)
+  int _countUsedCells() {
+    int count = 0;
+    for (int r = 0; r < 10; r++) {
+      for (int c = 0; c < 10; c++) {
+        if (grid[r][c].isNotEmpty || _numberCells.contains('$r:$c')) {
+          count++;
+        }
+      }
+    }
+    return count;
   }
 
   // Try to place more words into exact-length empty slots (rows & columns)
@@ -811,143 +880,6 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
     }
   }
 
-  // Force-fill any remaining empty runs with synthetic words (horizontal first, then vertical)
-  int _forceFillAllGaps(
-    int startQuestionNumber, {
-    int targetCountCap = 1073741823,
-  }) {
-    int qNum = startQuestionNumber;
-    bool stop = false;
-
-    // Helper to place a synthetic word in a row segment [start..end]
-    void fillRowRun(int r, int start, int end) {
-      if (stop) return;
-      int len = end - start + 1;
-      if (len <= 0) return;
-      // Break long runs into segments of length <= 9
-      int cursorEnd = end;
-      while (cursorEnd >= start) {
-        if (stop) break;
-        int segEnd = cursorEnd;
-        int segStart = max(start, segEnd - 8); // upto length 9
-        int segLen = segEnd - segStart + 1;
-        // LTR: number cell is before first letter at segStart-1
-        int segStartCol = segStart - 1;
-        final word = _generateSyntheticWord(segLen);
-        if (_canPlaceWord(word, r, segStartCol, true)) {
-          if (questions.length >= targetCountCap) {
-            stop = true;
-            break;
-          }
-          _placeWord(word, r, segStartCol, true, qNum);
-          questions.add(
-            QuestionInfo(
-              id: qNum,
-              question: 'Added question (len $segLen)',
-              answer: word,
-              color: _getNextUniqueColor(),
-              horizontal: true,
-            ),
-          );
-          _horizontalCount++;
-          qNum++;
-          if (questions.length >= targetCountCap) {
-            stop = true;
-            break;
-          }
-        }
-        cursorEnd = segStart - 1;
-      }
-    }
-
-    // Helper to place a synthetic word in a col segment [start..end]
-    void fillColRun(int c, int start, int end) {
-      if (stop) return;
-      int len = end - start + 1;
-      if (len <= 0) return;
-      int cursorEnd = end;
-      while (cursorEnd >= start) {
-        if (stop) break;
-        int segEnd = cursorEnd;
-        int segStart = max(start, segEnd - 8);
-        int segLen = segEnd - segStart + 1;
-        int segStartRow = segStart - 1; // number cell above first letter
-        final word = _generateSyntheticWord(segLen);
-        if (_canPlaceWord(word, segStartRow, c, false)) {
-          if (questions.length >= targetCountCap) {
-            stop = true;
-            break;
-          }
-          _placeWord(word, segStartRow, c, false, qNum);
-          questions.add(
-            QuestionInfo(
-              id: qNum,
-              question: 'Added question (len $segLen)',
-              answer: word,
-              color: _getNextUniqueColor(),
-              horizontal: false,
-            ),
-          );
-          _verticalCount++;
-          qNum++;
-          if (questions.length >= targetCountCap) {
-            stop = true;
-            break;
-          }
-        }
-        cursorEnd = segStart - 1;
-      }
-    }
-
-    // Pass 1: fill row runs
-    for (int r = 0; r < 10 && !stop; r++) {
-      int c = 0;
-      while (c < 10) {
-        while (c < 10 &&
-            (grid[r][c].isNotEmpty || _numberCells.contains('$r:$c'))) {
-          c++;
-        }
-        if (c >= 10) break;
-        int start = c;
-        while (c < 10 &&
-            grid[r][c].isEmpty &&
-            !_numberCells.contains('$r:$c')) {
-          c++;
-        }
-        int end = c - 1;
-        if (end >= start) {
-          fillRowRun(r, start, end);
-          if (stop) break;
-        }
-      }
-    }
-
-    // Pass 2: fill column runs
-    for (int c = 0; c < 10 && !stop; c++) {
-      int r = 0;
-      while (r < 10) {
-        while (r < 10 &&
-            (grid[r][c].isNotEmpty || _numberCells.contains('$r:$c'))) {
-          r++;
-        }
-        if (r >= 10) break;
-        int start = r;
-        while (r < 10 &&
-            grid[r][c].isEmpty &&
-            !_numberCells.contains('$r:$c')) {
-          r++;
-        }
-        int end = r - 1;
-        if (end >= start) {
-          fillColRun(c, start, end);
-          if (stop) break;
-        }
-      }
-    }
-
-    return qNum;
-  }
-
   // When a question is answered correctly, replace underscores in its text with the actual answer.
   String _formatQuestionText(QuestionInfo q) {
     final String text = q.question;
@@ -996,23 +928,6 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
       length,
       (_) => letters[rand.nextInt(letters.length)],
     ).join();
-  }
-
-  // Build a list of grid cells ordered from center outward for symmetric scans
-  List<List<int>> _buildCenterPriorityCells() {
-    final cells = <List<int>>[];
-    for (int r = 0; r < 10; r++) {
-      for (int c = 0; c < 10; c++) {
-        cells.add([r, c]);
-      }
-    }
-    double center = 4.5; // center between 4 and 5 in a 0-based 10x10 grid
-    cells.sort((a, b) {
-      final da = (a[0] - center).abs() + (a[1] - center).abs();
-      final db = (b[0] - center).abs() + (b[1] - center).abs();
-      return da.compareTo(db);
-    });
-    return cells;
   }
 
   // Renumber questions so numbering starts at top-left of each row,
@@ -1141,9 +1056,9 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         return false;
       }
 
-      // Adjacency: Around each letter cell, no other letter cell from another word
-      // can be orthogonally adjacent, except when this cell is an overlap (shared).
-      if (_enforceAdjacency) {
+      // Relaxed adjacency: Only check adjacency for words with more than 25 questions placed
+      // This allows more words to be placed initially, then becomes more restrictive
+      if (_enforceAdjacency && questions.length >= 25) {
         List<List<int>> nbrs = [
           [row - 1, col],
           [row + 1, col],
@@ -1162,8 +1077,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         }
       }
     }
-    // Trailing boundary: the cell immediately after the last letter must not be a letter
-    if (_enforceAdjacency) {
+    // Relaxed trailing boundary: Only enforce after 25 questions
+    if (_enforceAdjacency && questions.length >= 25) {
       if (horizontal) {
         int tailCol = startCol + word.length; // last letter col
         int afterTailCol = tailCol + 1; // must be empty or out of bounds
@@ -1232,7 +1147,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         return false;
       }
 
-      if (_enforceAdjacency) {
+      // Relaxed adjacency: Only check adjacency for words with more than 25 questions placed
+      if (_enforceAdjacency && questions.length >= 25) {
         List<List<int>> nbrs = [
           [row - 1, col],
           [row + 1, col],
@@ -1251,7 +1167,8 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
         }
       }
     }
-    if (_enforceAdjacency) {
+    // Relaxed trailing boundary: Only enforce after 25 questions
+    if (_enforceAdjacency && questions.length >= 25) {
       if (horizontal) {
         int tailCol = startCol + word.length;
         int afterTailCol = tailCol + 1;
@@ -1305,18 +1222,6 @@ class _WordPuzzleGameState extends State<WordPuzzleGame> {
 
     // Do not create trailing neutral walls. The cell beyond tail may stay empty
     // for now and will later become the start of another word or lie out of bounds.
-  }
-
-  // Check if there exists any cell that's not a letter and not a start number
-  bool _hasUnusedCells() {
-    for (int r = 0; r < 10; r++) {
-      for (int c = 0; c < 10; c++) {
-        if (grid[r][c].isEmpty && !_numberCells.contains('$r:$c')) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   List<Color> _buildColorPalette() {

@@ -30,4 +30,20 @@ const Map<String, String> qAProlog = {
   "In Prolog, a clause ends with a _ _.": "PERIOD",
   "In Prolog, the standard relation for concatenating lists is _ _/3.":
       "APPEND",
+  "In Prolog, check if a term is a variable using the built-in predicate _ _.":
+      "VAR",
+  "In Prolog, check if a term is not a variable using the built-in predicate _ _.":
+      "NONVAR",
+  "In Prolog, create choice points during backtracking with alternative _ _.":
+      "SOLUTIONS",
+  "In Prolog, unification is the process of making two terms _ _.": "EQUAL",
+  "In Prolog, the built-in predicate to read terms from input is _ _.": "READ",
+  "In Prolog, the built-in predicate to write terms to output is _ _.": "WRITE",
+  "In Prolog, repeat alternative solutions until one succeeds using _ _.":
+      "REPEAT",
+  "In Prolog, check the length of a list using the predicate _ _.": "LENGTH",
+  "In Prolog, check if an element is a member of a list using _ _.": "MEMBER",
+  "In Prolog, sort a list using the built-in predicate _ _.": "SORT",
+  "In Prolog, check if two terms unify without binding variables using _ _.":
+      "UNIFIABLE",
 };

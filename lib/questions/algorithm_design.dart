@@ -56,4 +56,12 @@ const Map<String, String> qAAlgorithmDesign = {
       "DIFFERENCE",
   "Searching for the best parameter by embedding a decision procedure is _ _ search.":
       "PARAMETRIC",
+  "Maintaining the best solution found so far while exploring the solution space is _ _ optimization.":
+      "LOCAL",
+  "Building solutions by always choosing the best immediate option defines _ _ strategy.":
+      "GREEDY",
+  "Testing algorithm correctness by running it on many automatically generated inputs is _ _ testing.":
+      "PROPERTY",
+  "Reducing a hard problem to a known hard problem to prove computational difficulty uses _ _.":
+      "REDUCTION",
 };

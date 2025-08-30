@@ -32,4 +32,34 @@ const Map<String, String> qADivideAndConquer = {
       "MASTER",
   "Breaking problems into self-similar subproblems and solving them recursively relies fundamentally on _ _.":
       "RECURSION",
+  "The base case in a divide-and-conquer algorithm prevents infinite _ _.":
+      "RECURSION",
+  "Merge sort has a time complexity of _ _ (O(n log n)) in all cases.": "NLOGN",
+  "Quick sort's average case time complexity is _ _ (O(n log n)).": "NLOGN",
+  "The divide-and-conquer approach to finding maximum and minimum elements in an array reduces comparisons to approximately _ _.":
+      "THREENTWO",
+  "The divide-and-conquer matrix multiplication algorithm by Strassen reduces the number of scalar multiplications from 8 to _ _.":
+      "SEVEN",
+  "Quick select algorithm finds the k-th order statistic in expected _ _ time.":
+      "LINEAR",
+  "Merge sort requires _ _ extra space for the temporary arrays during merging.":
+      "LINEAR",
+  "The convex hull divide-and-conquer algorithm has time complexity _ _.":
+      "NLOGN",
+  "Karatsuba multiplication reduces the complexity of multiplying n-digit numbers from O(n²) to approximately O(n^_).":
+      "LOG3",
+  "In the Master Theorem, if a = 1 and b = 2, the recurrence T(n) = T(n/2) + O(1) has solution _ _.":
+      "LOGN",
+  "The _ _ problem can be solved in O(n log n) using divide-and-conquer by splitting points and checking a middle strip.":
+      "CLOSEST",
+  "Polynomial multiplication can be done efficiently using divide-and-conquer with the _ _ transform.":
+      "FOURIER",
+  "The divide-and-conquer approach typically uses _ _ to break down problems into smaller instances.":
+      "RECURSION",
+  "Quick sort's worst-case occurs when the _ _ is always the smallest or largest element.":
+      "PIVOT",
+  "The number of leaves in a divide-and-conquer recursion tree often determines the algorithm's _ _ complexity.":
+      "TIME",
+  "Merge sort is _ _ sorting algorithm, meaning equal elements maintain their relative order.":
+      "STABLE",
 };

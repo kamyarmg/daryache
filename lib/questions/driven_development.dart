@@ -36,4 +36,30 @@ const Map<String, String> qADrivenDevelopment = {
   "In DDD, grouping changes to be committed atomically uses the UNIT OF WORK(_ _) pattern.":
       "UOW",
   "In BDD, the Given–When–Then structure is often abbreviated _ _ _.": "GWT",
+  "In Test-Driven Development, the cycle of Red-Green-Refactor is also called the _ _ cycle.":
+      "TDD",
+  "In TDD, tests should be _ _, running quickly to provide fast feedback.":
+      "FAST",
+  "In TDD, a test that checks a single concern should be _ _ and focused.":
+      "SIMPLE",
+  "In TDD, write the _ _ amount of code needed to make a test pass.": "MINIMUM",
+  "In BDD, scenarios are often called _ _ to emphasize their role in documentation.":
+      "SPECS",
+  "In DDD, the language shared between developers and domain experts is called _ _ language.":
+      "UBIQUITOUS",
+  "In DDD, the main area of focus for the software is called the _ _ domain.":
+      "CORE",
+  "In DDD, well-defined boundaries between different parts of the system are called _ _ contexts.":
+      "BOUNDED",
+  "In DDD, objects without identity that are defined by their attributes are _ _ objects.":
+      "VALUE",
+  "In TDD, the practice of writing tests before implementation is called _ _-first development.":
+      "TEST",
+  "In BDD, the step that sets up the initial state is _ _.": "GIVEN",
+  "In BDD, the step that triggers the action being tested is _ _.": "WHEN",
+  "In BDD, the step that verifies the expected outcome is _ _.": "THEN",
+  "In DDD, services that don't naturally belong to entities or value objects are _ _ services.":
+      "DOMAIN",
+  "In DDD, the process of translating between domain objects and external representations is called _ _.":
+      "MAPPING",
 };

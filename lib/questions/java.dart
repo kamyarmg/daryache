@@ -31,4 +31,30 @@ const Map<String, String> qAJava = {
       "THROWS",
   "In Java, mark a field so reads/writes go to main memory (no thread-local caching) with the keyword _ _.":
       "VOLATILE",
+  "In Java, the main method signature must include 'String[] _ _' as its parameter.":
+      "ARGS",
+  "In Java, create a new object instance using the _ _ keyword followed by a constructor call.":
+      "NEW",
+  "In Java, handle exceptions that might be thrown by code using a _ _ block.":
+      "CATCH",
+  "In Java, explicitly signal that an exception has occurred using the _ _ statement.":
+      "THROW",
+  "In Java, the superclass of all classes is _ _.": "OBJECT",
+  "In Java, prevent a class from being extended by marking it _ _.": "FINAL",
+  "In Java, prevent a method from being overridden by marking it _ _.": "FINAL",
+  "In Java, define a constant that belongs to the class rather than instances using 'static final _ _'.":
+      "FIELD",
+  "In Java, the keyword _ _ refers to the current object instance.": "THIS",
+  "In Java, call a parent class constructor or method using the keyword _ _.":
+      "SUPER",
+  "In Java, group related functionality without instantiation using a _ _ class pattern.":
+      "UTILITY",
+  "In Java, access elements in an array using square _ _.": "BRACKETS",
+  "In Java, the enhanced for loop is also called a for-_ _ loop.": "EACH",
+  "In Java, create parameterized types that work with different objects using _ _.":
+      "GENERICS",
+  "In Java, mark a method that must be implemented by subclasses as _ _.":
+      "ABSTRACT",
+  "In Java, use _ _ statements to handle multiple conditions more efficiently than if-else chains.":
+      "SWITCH",
 };

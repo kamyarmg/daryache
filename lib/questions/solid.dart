@@ -29,4 +29,41 @@ const Map<String, String> qASOLID = {
       "INJECTION",
   "Using factory patterns helps follow _ _ by hiding object creation details.":
       "DIP",
+  "SOLID principles were popularized by Robert C. Martin, also known as Uncle _ _.":
+      "BOB",
+  "The first principle of SOLID, SRP, states that a class should have only one _ _ to change.":
+      "REASON",
+  "The second principle of SOLID, OCP, says entities should be open for _ _ but closed for modification.":
+      "EXTENSION",
+  "The third principle of SOLID, LSP, ensures that _ _ must be substitutable for their base types.":
+      "SUBTYPES",
+  "The fourth principle of SOLID, ISP, states that no client should be forced to depend on methods it does not _ _.":
+      "USE",
+  "Violating SRP often leads to classes that are difficult to _ _ and modify.":
+      "TEST",
+  "LSP violations can cause _ _ errors when substituting derived classes for base classes.":
+      "RUNTIME",
+  "Interface Segregation Principle helps reduce _ _ between classes and interfaces.":
+      "COUPLING",
+  "Dependency Inversion Principle is often implemented using _ _ containers or frameworks.":
+      "IOC",
+  "A class that handles both database access and business logic violates the _ _ principle.":
+      "SRP",
+  "Adding new features through inheritance instead of modifying existing code follows the _ _ principle.":
+      "OCP",
+  "If a derived class cannot be used wherever its base class is expected, it violates _ _.":
+      "LSP",
+  "Creating many small, focused interfaces instead of one large interface follows _ _.":
+      "ISP",
+  "Injecting dependencies through constructors is a common implementation of _ _.":
+      "DIP",
+  "The _ _ pattern is often used to implement the Open/Closed Principle.":
+      "STRATEGY",
+  "SOLID principles help create code that is more _ _, maintainable, and testable.":
+      "FLEXIBLE",
+  "The _ _ pattern can help implement dependency inversion by creating objects indirectly.":
+      "FACTORY",
+  "When a class has multiple reasons to change, it likely violates the _ _ Responsibility Principle.":
+      "SINGLE",
+  "The Liskov Substitution Principle is named after Barbara _ _.": "LISKOV",
 };

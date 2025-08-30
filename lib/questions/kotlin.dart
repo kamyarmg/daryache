@@ -40,4 +40,24 @@ const Map<String, String> qAKotlin = {
       "INLINE",
   "In Kotlin, replace a base-class implementation by marking the member with the keyword _ _.":
       "OVERRIDE",
+  "In Kotlin, handle nullable types safely by using the safe call operator _ _.":
+      "QUESTION",
+  "In Kotlin, create immutable lists using the function _ _().": "LISTOF",
+  "In Kotlin, lambda expressions are enclosed in _ _ braces.": "CURLY",
+  "In Kotlin, the implicit parameter name for single-parameter lambdas is _ _.":
+      "IT",
+  "In Kotlin, force a nullable value to non-null using the not-null assertion operator _ _.":
+      "BANGBANG",
+  "In Kotlin, call functions with parameter names for clarity using _ _ arguments.":
+      "NAMED",
+  "In Kotlin, create a range of integers using the _ _ operator (e.g., 1..10).":
+      "DOTDOT",
+  "In Kotlin, check if a value is in a range or collection using the _ _ operator.":
+      "IN",
+  "In Kotlin, create string templates using the _ _ symbol followed by variable names.":
+      "DOLLAR",
+  "In Kotlin, define type aliases to simplify complex type names using _ _.":
+      "TYPEALIAS",
+  "In Kotlin, handle multiple exceptions in a single catch block using the _ _ keyword.":
+      "OR",
 };

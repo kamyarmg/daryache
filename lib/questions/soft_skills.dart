@@ -38,4 +38,7 @@ const Map<String, String> qASoftSkills = {
       "CLARITY",
   "Running short daily check-ins that align on goals, blockers, and handoffs is effective _ _.":
       "STANDUPS",
+  "The ability to understand and share the feelings of others is called _ _.":
+      "EMPATHY",
+  "Setting clear expectations and following through builds _ _.": "TRUST",
 };
